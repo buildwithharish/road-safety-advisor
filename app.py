@@ -7,8 +7,14 @@ import google.generativeai as genai
 model = pickle.load(open('model.pkl', 'rb'))
 
 # Gemini setup
+import google.generativeai as genai
+
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-gemini = genai.GenerativeModel("gemini-2.0-flash-lite")
+
+# Auto pick available model
+available_models = [m.name for m in genai.list_models() 
+                    if 'generateContent' in m.supported_generation_methods]
+gemini = genai.GenerativeModel(available_models[0])
 # App title
 st.title("🚦 AI Road Safety Advisor")
 st.write("Fill in the details below to predict accident severity.")
@@ -70,6 +76,7 @@ if st.button("🔍 Predict Accident Severity"):
 st.divider()
 st.subheader("💬 Road Safety AI Chatbot")
 st.write("Ask me anything about road safety!")
+st.write("Using model:", available_models[0])  # ← add this line
 
 # Store chat history
 if "messages" not in st.session_state:
