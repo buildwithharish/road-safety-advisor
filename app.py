@@ -8,8 +8,7 @@ model = pickle.load(open('model.pkl', 'rb'))
 
 # Gemini setup
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-gemini = genai.GenerativeModel("gemini-pro")
-
+gemini = genai.GenerativeModel("gemini-1.0-pro")
 # App title
 st.title("🚦 AI Road Safety Advisor")
 st.write("Fill in the details below to predict accident severity.")
