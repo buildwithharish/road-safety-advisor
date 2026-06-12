@@ -104,7 +104,7 @@ if user_input:
         history += f"{role}: {msg['content']}\n"
 
     # Get Gemini response
-    with st.spinner("Thinking..."):
+   with st.spinner("Thinking..."):
         prompt = f"""You are a helpful road safety advisor chatbot.
 Only answer questions related to road safety, driving tips,
 accident prevention, traffic rules, and vehicle safety.
@@ -117,8 +117,14 @@ Conversation so far:
 User: {user_input}
 Bot:"""
 
-        response = gemini.generate_content(prompt)
-        bot_reply = response.text
+        try:
+            response = gemini.generate_content(prompt)
+            if response and response.text:
+                bot_reply = response.text
+            else:
+                bot_reply = "Sorry, I could not generate a response. Please try asking differently."
+        except Exception as e:
+            bot_reply = "Sorry, I had trouble answering that. Please try rephrasing your question."
 
     # Show and store bot reply
     st.chat_message("assistant").write(bot_reply)
