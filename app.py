@@ -7,14 +7,11 @@ import google.generativeai as genai
 model = pickle.load(open('model.pkl', 'rb'))
 
 # Gemini setup
-import google.generativeai as genai
-
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-
-# Auto pick available model
-available_models = [m.name for m in genai.list_models() 
+available_models = [m.name for m in genai.list_models()
                     if 'generateContent' in m.supported_generation_methods]
 gemini = genai.GenerativeModel(available_models[0])
+
 # App title
 st.title("🚦 AI Road Safety Advisor")
 st.write("Fill in the details below to predict accident severity.")
@@ -76,7 +73,7 @@ if st.button("🔍 Predict Accident Severity"):
 st.divider()
 st.subheader("💬 Road Safety AI Chatbot")
 st.write("Ask me anything about road safety!")
-st.write("Using model:", available_models[0])  # ← add this line
+st.write("Using model:", available_models[0])
 
 # Store chat history
 if "messages" not in st.session_state:
@@ -90,21 +87,18 @@ for msg in st.session_state.messages:
 user_input = st.chat_input("Ask a road safety question...")
 
 if user_input:
-    # Show user message
     st.chat_message("user").write(user_input)
     st.session_state.messages.append({
         "role": "user",
         "content": user_input
     })
 
-    # Build conversation history for Gemini
     history = ""
     for msg in st.session_state.messages[:-1]:
         role = "User" if msg["role"] == "user" else "Bot"
         history += f"{role}: {msg['content']}\n"
 
-    # Get Gemini response
-   with st.spinner("Thinking..."):
+    with st.spinner("Thinking..."):
         prompt = f"""You are a helpful road safety advisor chatbot.
 Only answer questions related to road safety, driving tips,
 accident prevention, traffic rules, and vehicle safety.
@@ -126,7 +120,6 @@ Bot:"""
         except Exception as e:
             bot_reply = "Sorry, I had trouble answering that. Please try rephrasing your question."
 
-    # Show and store bot reply
     st.chat_message("assistant").write(bot_reply)
     st.session_state.messages.append({
         "role": "assistant",
