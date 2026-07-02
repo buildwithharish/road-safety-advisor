@@ -3,41 +3,191 @@ import pickle
 import numpy as np
 import google.generativeai as genai
 
-# Load the saved model
+# ── Page config ───────────────────────────────────
+st.set_page_config(
+    page_title="AI Road Safety Advisor",
+    page_icon="🚦",
+    layout="centered"
+)
+
+# ── Custom CSS ────────────────────────────────────
+st.markdown("""
+<style>
+    /* Header */
+    .main-header {
+        background: linear-gradient(135deg, #0C447C, #185FA5);
+        padding: 24px 28px;
+        border-radius: 12px;
+        margin-bottom: 24px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+    .main-header h1 {
+        color: white;
+        font-size: 24px;
+        font-weight: 600;
+        margin: 0;
+    }
+    .main-header p {
+        color: rgba(255,255,255,0.75);
+        font-size: 14px;
+        margin: 0;
+    }
+
+    /* Section titles */
+    .section-title {
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #888780;
+        margin-bottom: 12px;
+    }
+
+    /* Risk meter */
+    .meter-wrap {
+        display: flex;
+        gap: 6px;
+        margin: 8px 0 4px;
+    }
+    .meter-seg {
+        flex: 1;
+        height: 8px;
+        border-radius: 99px;
+    }
+    .meter-labels {
+        display: flex;
+        justify-content: space-between;
+        font-size: 11px;
+        color: #888780;
+        margin-bottom: 16px;
+    }
+
+    /* Result cards */
+    .result-low {
+        background: #EAF3DE;
+        border: 0.5px solid #C0DD97;
+        border-radius: 10px;
+        padding: 14px 18px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin: 12px 0;
+    }
+    .result-mid {
+        background: #FAEEDA;
+        border: 0.5px solid #FAC775;
+        border-radius: 10px;
+        padding: 14px 18px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin: 12px 0;
+    }
+    .result-high {
+        background: #FCEBEB;
+        border: 0.5px solid #F7C1C1;
+        border-radius: 10px;
+        padding: 14px 18px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin: 12px 0;
+    }
+    .result-low .title  { color: #27500A; font-weight: 600; font-size: 15px; }
+    .result-mid .title  { color: #633806; font-weight: 600; font-size: 15px; }
+    .result-high .title { color: #791F1F; font-weight: 600; font-size: 15px; }
+    .result-low .desc   { color: #3B6D11; font-size: 13px; }
+    .result-mid .desc   { color: #854F0B; font-size: 13px; }
+    .result-high .desc  { color: #A32D2D; font-size: 13px; }
+
+    /* Predict button */
+    .stButton > button {
+        background: #0C447C !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 8px !important;
+        padding: 10px 24px !important;
+        font-size: 15px !important;
+        font-weight: 500 !important;
+        width: 100% !important;
+    }
+    .stButton > button:hover {
+        background: #185FA5 !important;
+    }
+
+    /* Selectbox label */
+    .stSelectbox label {
+        font-size: 13px !important;
+        font-weight: 500 !important;
+        color: #5F5E5A !important;
+    }
+
+    /* Chat section */
+    .chat-header {
+        background: #0C447C;
+        color: white;
+        padding: 12px 16px;
+        border-radius: 10px 10px 0 0;
+        font-size: 14px;
+        font-weight: 500;
+    }
+
+    /* Hide debug line */
+    .debug { display: none; }
+
+    /* Divider color */
+    hr { border-color: #D3D1C7 !important; }
+</style>
+""", unsafe_allow_html=True)
+
+# ── Load model ────────────────────────────────────
 model = pickle.load(open('model.pkl', 'rb'))
 
-# Gemini setup
+# ── Gemini setup ──────────────────────────────────
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 available_models = [m.name for m in genai.list_models()
                     if 'generateContent' in m.supported_generation_methods]
 gemini = genai.GenerativeModel(available_models[0])
 
-# App title
-st.title("🚦 AI Road Safety Advisor")
-st.write("Fill in the details below to predict accident severity.")
-st.divider()
+# ── Header ────────────────────────────────────────
+st.markdown("""
+<div class="main-header">
+    <div>
+        <h1>🚦 AI Road Safety Advisor</h1>
+        <p>Predict accident severity and get AI-powered safety tips</p>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
-# ── User Inputs ──────────────────────────────────
-weather = st.selectbox("🌦 Weather Condition", [
-    "Fine no high winds", "Raining no high winds",
-    "Snowing no high winds", "Fine + high winds",
-    "Fog or mist", "Raining + high winds", "Other"
-])
-road = st.selectbox("🛣 Road Type", [
-    "Single carriageway", "Dual carriageway",
-    "Roundabout", "One way street", "Slip road"
-])
-light = st.selectbox("💡 Light Condition", [
-    "Daylight", "Darkness - lights lit",
-    "Darkness - no lighting", "Darkness - lights unlit"
-])
-surface = st.selectbox("🌧 Road Surface", [
-    "Dry", "Wet or damp", "Snow",
-    "Frost or ice", "Flood over 3cm deep"
-])
-area = st.selectbox("🏙 Area Type", ["Urban", "Rural"])
+# ── Inputs ────────────────────────────────────────
+st.markdown('<p class="section-title">Travel conditions</p>', unsafe_allow_html=True)
 
-# ── Encode inputs ─────────────────────────────────
+col1, col2 = st.columns(2)
+with col1:
+    weather = st.selectbox("🌦 Weather Condition", [
+        "Fine no high winds", "Raining no high winds",
+        "Snowing no high winds", "Fine + high winds",
+        "Fog or mist", "Raining + high winds", "Other"
+    ])
+    light = st.selectbox("💡 Light Condition", [
+        "Daylight", "Darkness - lights lit",
+        "Darkness - no lighting", "Darkness - lights unlit"
+    ])
+    area = st.selectbox("🏙 Area Type", ["Urban", "Rural"])
+
+with col2:
+    road = st.selectbox("🛣 Road Type", [
+        "Single carriageway", "Dual carriageway",
+        "Roundabout", "One way street", "Slip road"
+    ])
+    surface = st.selectbox("🌧 Road Surface", [
+        "Dry", "Wet or damp", "Snow",
+        "Frost or ice", "Flood over 3cm deep"
+    ])
+
+# ── Encode ────────────────────────────────────────
 weather_map = {"Fine no high winds":1,"Raining no high winds":2,
                "Snowing no high winds":3,"Fine + high winds":4,
                "Fog or mist":5,"Raining + high winds":6,"Other":7}
@@ -55,35 +205,75 @@ input_data = np.array([[
     area_map[area]
 ]])
 
-# ── Predict button ─────────────────────────────────
-st.divider()
-if st.button("🔍 Predict Accident Severity"):
+# ── Predict ───────────────────────────────────────
+st.markdown("<br>", unsafe_allow_html=True)
+predict = st.button("🔍 Predict Accident Severity")
+
+if predict:
     result = model.predict(input_data)[0]
+
+    st.markdown('<p class="section-title">Risk meter</p>', unsafe_allow_html=True)
+
     if result == 1:
-        st.success("✅ LOW RISK — Safe to travel")
-        st.info("💡 Follow speed limits. Stay alert.")
+        st.markdown("""
+        <div class="meter-wrap">
+            <div class="meter-seg" style="background:#97C459"></div>
+            <div class="meter-seg" style="background:#EF9F27;opacity:.3"></div>
+            <div class="meter-seg" style="background:#E24B4A;opacity:.3"></div>
+        </div>
+        <div class="meter-labels"><span>Low</span><span>Medium</span><span>High</span></div>
+        <div class="result-low">
+            <div>
+                <p class="title">✅ Low risk — Safe to travel</p>
+                <p class="desc">Follow speed limits. Stay alert. Wear seatbelt.</p>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
     elif result == 2:
-        st.warning("⚠️ MEDIUM RISK — Drive carefully")
-        st.info("💡 Reduce speed. Keep safe distance.")
+        st.markdown("""
+        <div class="meter-wrap">
+            <div class="meter-seg" style="background:#97C459;opacity:.3"></div>
+            <div class="meter-seg" style="background:#EF9F27"></div>
+            <div class="meter-seg" style="background:#E24B4A;opacity:.3"></div>
+        </div>
+        <div class="meter-labels"><span>Low</span><span>Medium</span><span>High</span></div>
+        <div class="result-mid">
+            <div>
+                <p class="title">⚠️ Medium risk — Drive carefully</p>
+                <p class="desc">Reduce speed. Keep safe distance. Avoid distractions.</p>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
     else:
-        st.error("🚨 HIGH RISK — Avoid travel if possible")
-        st.info("💡 Postpone journey. Drive very slowly if urgent.")
+        st.markdown("""
+        <div class="meter-wrap">
+            <div class="meter-seg" style="background:#97C459;opacity:.3"></div>
+            <div class="meter-seg" style="background:#EF9F27;opacity:.3"></div>
+            <div class="meter-seg" style="background:#E24B4A"></div>
+        </div>
+        <div class="meter-labels"><span>Low</span><span>Medium</span><span>High</span></div>
+        <div class="result-high">
+            <div>
+                <p class="title">🚨 High risk — Avoid travel if possible</p>
+                <p class="desc">Postpone journey. If urgent, drive very slowly and stay on main roads.</p>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-# ── Gemini AI Chatbot ──────────────────────────────
-st.divider()
-st.subheader("💬 Road Safety AI Chatbot")
-st.write("Ask me anything about road safety!")
-st.write("Using model:", available_models[0])
+# ── Chatbot ───────────────────────────────────────
+st.markdown("<br>", unsafe_allow_html=True)
+st.markdown('<div class="chat-header">💬 Road Safety AI Chatbot — Ask me anything</div>',
+            unsafe_allow_html=True)
+st.markdown("<br>", unsafe_allow_html=True)
 
-# Store chat history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Show previous messages
 for msg in st.session_state.messages:
     st.chat_message(msg["role"]).write(msg["content"])
 
-# User input
 user_input = st.chat_input("Ask a road safety question...")
 
 if user_input:
@@ -110,7 +300,6 @@ Conversation so far:
 {history}
 User: {user_input}
 Bot:"""
-
         try:
             response = gemini.generate_content(prompt)
             if response and response.text:
