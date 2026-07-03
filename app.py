@@ -619,6 +619,22 @@ if location:
             surface_code, road_code, area_code
         )
 
+    # Make the current conditions available to the chatbot below
+    st.session_state['current_conditions'] = {
+        'location_name': location_name,
+        'weather_desc': weather_desc,
+        'temp': temp,
+        'humidity': humidity,
+        'wind_speed': wind_speed,
+        'light_label': light_label,
+        'surface_label': surface_label,
+        'road_label': road_label,
+        'area_label': area_label,
+        'risk_score': risk_score,
+        'hours_driving': round(hours_driving, 1),
+        'timezone_str': timezone_str,
+    }
+
     st.success(f"📍 Location detected — Accuracy: ±{accuracy}m | "
                f"Timezone: {timezone_str}")
 
@@ -1092,9 +1108,26 @@ else:
 st.markdown("<br>", unsafe_allow_html=True)
 st.markdown(
     '<div class="chat-header">'
-    '💬 Road Safety AI Chatbot — Ask me anything'
+    '💬 Road Safety AI Chatbot — knows your live trip data'
     '</div>',
     unsafe_allow_html=True)
+
+# Show a quick summary chip of what context the bot currently has
+cc = st.session_state.get('current_conditions')
+if cc:
+    chips = [f"📍 {cc['location_name'][:28]}",
+             f"🌦 {cc['weather_desc']}",
+             f"🚦 Risk {cc['risk_score']}/100",
+             f"😴 {cc['hours_driving']}h since break"]
+    if st.session_state.get('route_active'):
+        chips.append(f"🏁 To {st.session_state.get('dest_name', '')[:28]}")
+        tr = st.session_state.get('traffic')
+        if tr:
+            chips.append(f"🚗 Traffic: {tr['level']}")
+    st.caption(" · ".join(chips))
+else:
+    st.caption("Allow location access above so the chatbot can see your live conditions.")
+
 st.markdown("<br>", unsafe_allow_html=True)
 
 if "messages" not in st.session_state:
@@ -1103,7 +1136,23 @@ if "messages" not in st.session_state:
 for msg in st.session_state.messages:
     st.chat_message(msg["role"]).write(msg["content"])
 
-user_input = st.chat_input("Ask a road safety question...")
+# Quick suggestion chips tied to whatever is currently on the map
+if st.session_state.get('route_active'):
+    suggestions = ["Is my route safe right now?",
+                   "How's the traffic ahead?",
+                   "Should I take a break?"]
+else:
+    suggestions = ["Is it safe to drive right now?",
+                   "What should I watch out for?",
+                   "Tips for tonight's drive?"]
+
+clicked_suggestion = None
+sugg_cols = st.columns(len(suggestions))
+for i, (col, s) in enumerate(zip(sugg_cols, suggestions)):
+    if col.button(s, use_container_width=True, key=f"sugg_{i}"):
+        clicked_suggestion = s
+
+user_input = st.chat_input("Ask a road safety question...") or clicked_suggestion
 
 if user_input:
     st.chat_message("user").write(user_input)
@@ -1116,13 +1165,42 @@ if user_input:
         role = "User" if msg["role"] == "user" else "Bot"
         history += f"{role}: {msg['content']}\n"
 
+    # Build a live context block from whatever the map/inputs currently show
+    if cc:
+        context_str = f"""Live conditions for this driver right now:
+- Location: {cc['location_name'][:60]}
+- Weather: {cc['weather_desc']}, {cc['temp']}°C, wind {cc['wind_speed']}km/h, humidity {cc['humidity']}%
+- Road: {cc['surface_label']} surface, {cc['road_label']}, {cc['area_label']} area, {cc['light_label']}
+- Current risk score: {cc['risk_score']}/100
+- Time driving since last break: {cc['hours_driving']} hours"""
+
+        if st.session_state.get('route_active'):
+            context_str += f"""
+- Destination: {st.session_state.get('dest_name', '')[:60]}
+- Distance: {st.session_state.get('distance', 0)} km, ETA: {st.session_state.get('duration', 0)} min
+- Route risk score (weather+road+traffic combined): {st.session_state.get('route_risk_score', cc['risk_score'])}/100"""
+            tr = st.session_state.get('traffic')
+            if tr:
+                context_str += (f"\n- Live traffic: {tr['level']} congestion, "
+                                 f"+{tr['delay_min']} min delay vs free-flow")
+            incs = st.session_state.get('incidents')
+            if incs:
+                context_str += ("\n- Nearby incidents: "
+                                 + "; ".join(d for d, _, _ in incs[:3]))
+    else:
+        context_str = "No live location or trip data is available for this driver yet."
+
     with st.spinner("Thinking..."):
-        prompt = f"""You are a helpful road safety advisor chatbot.
-Only answer questions related to road safety, driving tips,
-accident prevention, traffic rules, and vehicle safety.
-Keep answers short, clear and practical (max 4 lines).
-If the question is not about road safety, politely say
-you can only help with road safety topics.
+        prompt = f"""You are a helpful road safety advisor chatbot embedded in a
+live trip-planning app. Only answer questions related to road safety, driving
+tips, accident prevention, traffic rules, vehicle safety, or the driver's
+current trip described below. When relevant, use the live data to give a
+specific, personalized answer (cite the actual risk score, traffic level,
+distance, or fatigue hours) instead of a generic one. Keep answers short,
+clear and practical (max 5 lines). If the question is unrelated to road
+safety or this trip, politely say you can only help with road safety topics.
+
+{context_str}
 
 Conversation so far:
 {history}
