@@ -8,6 +8,7 @@ import folium
 from folium import plugins
 from streamlit_folium import st_folium
 from streamlit_js_eval import get_geolocation
+from streamlit_autorefresh import st_autorefresh
 from datetime import datetime
 from timezonefinder import TimezoneFinder
 import pytz
@@ -233,6 +234,7 @@ def get_local_time(lat, lon):
         return datetime.now(), "UTC"
 
 
+@st.cache_data(ttl=300, show_spinner=False)
 def get_weather(lat, lon):
     """Fetch real-time weather from OpenWeatherMap"""
     try:
@@ -268,6 +270,7 @@ def get_weather(lat, lon):
         return 1, "Fine no high winds", 1, "Dry", 0, "Unknown", 0, 0
 
 
+@st.cache_data(ttl=300, show_spinner=False)
 def get_location_info(lat, lon):
     """Get area and road type from OpenStreetMap"""
     try:
@@ -306,6 +309,7 @@ def get_light_condition(local_time):
         return 4, "Darkness - lights lit"
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_destination_coords(destination):
     """Geocode destination using OpenStreetMap — completely free"""
     try:
@@ -323,6 +327,7 @@ def get_destination_coords(destination):
         return destination, None, None
 
 
+@st.cache_data(ttl=300, show_spinner=False)
 def get_nearest_hospitals(lat, lon):
     """Find nearest hospitals using OpenStreetMap Overpass API"""
     try:
@@ -344,9 +349,78 @@ def get_nearest_hospitals(lat, lon):
         return []
 
 
+@st.cache_data(ttl=120, show_spinner=False)
+def get_traffic_data(src_lat, src_lon, dest_lat, dest_lon):
+    """Get live traffic congestion + delay using the TomTom Routing API
+    (calculateRoute with traffic=true compares live travel time against
+    free-flow travel time for the same route)."""
+    try:
+        url = (f"https://api.tomtom.com/routing/1/calculateRoute/"
+               f"{src_lat},{src_lon}:{dest_lat},{dest_lon}/json")
+        params = {"key": st.secrets["TOMTOM_API_KEY"], "traffic": "true"}
+        r = requests.get(url, params=params, timeout=10).json()
+        summary = r['routes'][0]['summary']
+        time_with_traffic = summary['travelTimeInSeconds']
+        time_no_traffic = summary.get(
+            'noTrafficTravelTimeInSeconds', time_with_traffic)
+        delay_sec = max(time_with_traffic - time_no_traffic, 0)
+        delay_ratio = (delay_sec / time_no_traffic) if time_no_traffic else 0
+
+        if delay_ratio < 0.10:
+            level, color = "Light", "#27500A"
+        elif delay_ratio < 0.30:
+            level, color = "Moderate", "#854F0B"
+        else:
+            level, color = "Heavy", "#791F1F"
+
+        return {
+            "level": level,
+            "color": color,
+            "delay_min": round(delay_sec / 60, 1),
+            "delay_ratio": round(delay_ratio, 2),
+            "travel_time_min": round(time_with_traffic / 60),
+            "travel_time_no_traffic_min": round(time_no_traffic / 60),
+        }
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=120, show_spinner=False)
+def get_traffic_incidents(min_lat, min_lon, max_lat, max_lon):
+    """Fetch nearby traffic incidents (jams, accidents, roadworks) from
+    TomTom's Traffic Incident Details API within the route's bounding box."""
+    try:
+        # Pad the bounding box slightly so incidents right at the edges show up
+        pad = 0.02
+        bbox = (f"{min_lon - pad},{min_lat - pad},"
+                f"{max_lon + pad},{max_lat + pad}")
+        url = "https://api.tomtom.com/traffic/services/5/incidentDetails"
+        params = {
+            "bbox": bbox,
+            "fields": "{incidents{type,geometry{type,coordinates},"
+                      "properties{iconCategory,events{description}}}}",
+            "key": st.secrets["TOMTOM_API_KEY"],
+        }
+        r = requests.get(url, params=params, timeout=8).json()
+        incidents = []
+        for inc in r.get('incidents', [])[:5]:
+            props = inc.get('properties', {})
+            events = props.get('events', [])
+            desc = events[0]['description'] if events else "Traffic incident"
+            coords = inc.get('geometry', {}).get('coordinates', [None, None])
+            if coords and isinstance(coords[0], list):
+                coords = coords[0]
+            if coords and coords[0] is not None:
+                incidents.append((desc, coords[1], coords[0]))
+        return incidents
+    except Exception:
+        return []
+
+
 def calculate_risk_score(weather_code, light_code,
-                          surface_code, road_code, area_code):
-    """Calculate a 0-100 risk score from conditions"""
+                          surface_code, road_code, area_code,
+                          traffic_delay_ratio=0):
+    """Calculate a 0-100 risk score from conditions (+ live traffic delay)"""
     score = 0
     score += {1: 5, 2: 25, 3: 35, 4: 20, 5: 30, 6: 35, 7: 15
               }.get(weather_code, 10)
@@ -354,6 +428,8 @@ def calculate_risk_score(weather_code, light_code,
     score += {1: 5, 2: 20, 3: 30, 4: 35, 5: 40}.get(surface_code, 10)
     score += {1: 10, 2: 5, 3: 15, 6: 10, 7: 20}.get(road_code, 10)
     score += {1: 10, 2: 5}.get(area_code, 10)
+    # Heavy live traffic raises effective risk (up to +15)
+    score += min(round(traffic_delay_ratio * 50), 15)
     return min(score, 100)
 
 
@@ -497,12 +573,35 @@ st.info("Click the button below — your browser will ask for location permissio
 location = get_geolocation()
 
 if location:
-    lat = location['coords']['latitude']
-    lon = location['coords']['longitude']
+    # Round to ~11m precision so GPS jitter doesn't bust the caches above
+    # or churn the map object on every tick — this is a big part of the
+    # "everything keeps resetting" fix.
+    lat = round(location['coords']['latitude'], 4)
+    lon = round(location['coords']['longitude'], 4)
     accuracy = round(location['coords'].get('accuracy', 0))
 
     # Get local time using GPS timezone
     local_time, timezone_str = get_local_time(lat, lon)
+
+    # Real-time background tick every 60s — this is what makes the
+    # fatigue timer advance automatically without any user interaction.
+    st_autorefresh(interval=60_000, key="fatigue_autorefresh")
+
+    # ── Automatic fatigue tracking ─────────────────
+    if 'drive_start_time' not in st.session_state:
+        st.session_state['drive_start_time'] = local_time
+        st.session_state['fatigue_alert_2h'] = False
+        st.session_state['fatigue_alert_4h'] = False
+
+    elapsed = local_time - st.session_state['drive_start_time']
+    hours_driving = elapsed.total_seconds() / 3600
+
+    if hours_driving >= 4 and not st.session_state['fatigue_alert_4h']:
+        st.toast("🚨 4+ hours driving — take a mandatory break now!", icon="🚨")
+        st.session_state['fatigue_alert_4h'] = True
+    elif hours_driving >= 2 and not st.session_state['fatigue_alert_2h']:
+        st.toast("⚠️ 2+ hours driving — a short break is due soon.", icon="⚠️")
+        st.session_state['fatigue_alert_2h'] = True
 
     # Fetch all conditions
     with st.spinner("🔄 Fetching real-time road conditions..."):
@@ -588,11 +687,13 @@ if location:
         </div>
         """, unsafe_allow_html=True)
 
-        # Fatigue warning
-        st.markdown('<p class="section-title">😴 Driver fatigue check</p>',
+        # Fatigue warning — fully automatic, real-time
+        st.markdown('<p class="section-title">😴 Driver fatigue check (auto)</p>',
                     unsafe_allow_html=True)
-        hours_driving = st.slider(
-            "Hours since your last rest break?", 0, 12, 0)
+        fh = int(hours_driving)
+        fm = int((hours_driving - fh) * 60)
+        st.caption(f"⏱ Time since last break: {fh}h {fm}m "
+                   f"(updates automatically every minute)")
         if hours_driving >= 4:
             st.error("🚨 Fatigue Warning — You have been driving too long. "
                      "Take a break immediately before continuing.")
@@ -601,6 +702,12 @@ if location:
                        "Fatigue increases accident risk by 3x.")
         else:
             st.success("✅ You are well rested. Stay alert.")
+
+        if st.button("☕ I took a break — reset timer"):
+            st.session_state['drive_start_time'] = local_time
+            st.session_state['fatigue_alert_2h'] = False
+            st.session_state['fatigue_alert_4h'] = False
+            st.rerun()
 
         # Destination input
         st.markdown('<p class="section-title">🗺 Step 2 — Enter destination</p>',
@@ -641,15 +748,31 @@ if location:
                 hospitals = get_nearest_hospitals(lat, lon)
 
             if dest_lat and dest_lon:
+                # Live traffic (TomTom): travel time with vs without traffic
+                with st.spinner("🚦 Checking live traffic..."):
+                    traffic = get_traffic_data(lat, lon, dest_lat, dest_lon)
+                    incidents = get_traffic_incidents(
+                        min(lat, dest_lat), min(lon, dest_lon),
+                        max(lat, dest_lat), max(lon, dest_lon)
+                    )
+
+                traffic_delay_ratio = traffic['delay_ratio'] if traffic else 0
+
+                # Fold live traffic into the risk score used for this route
+                route_risk_score = calculate_risk_score(
+                    weather_code, light_code, surface_code,
+                    road_code, area_code, traffic_delay_ratio
+                )
+
                 # Build map (unpack distance/duration from OSRM)
                 route_map, distance, duration = build_route_map(
                     lat, lon, location_name,
                     dest_lat, dest_lon, dest_name,
-                    hospitals, risk_score
+                    hospitals, route_risk_score
                 )
 
                 # Persist everything needed to redraw this map on future
-                # reruns (e.g. when the chatbot or slider triggers a rerun)
+                # reruns (e.g. when the chatbot or autorefresh triggers one)
                 st.session_state['route_map'] = route_map
                 st.session_state['distance'] = distance
                 st.session_state['duration'] = duration
@@ -657,8 +780,12 @@ if location:
                 st.session_state['location_name'] = location_name
                 st.session_state['dest_name'] = dest_name
                 st.session_state['departure_time'] = local_time.strftime('%I:%M %p')
+                st.session_state['route_risk_score'] = route_risk_score
+                st.session_state['traffic'] = traffic
+                st.session_state['incidents'] = incidents
 
-                st_folium(route_map, width=600, height=450, key="persistent_map")
+                st_folium(route_map, width=600, height=450,
+                          key="persistent_map", returned_objects=[])
 
                 # Route summary
                 st.markdown('<p class="section-title">Route summary</p>',
@@ -687,10 +814,45 @@ if location:
                     </div>
                     <div class="info-card">
                         <p class="label">🚦 Risk Score</p>
-                        <p class="value">{risk_score}/100</p>
+                        <p class="value">{route_risk_score}/100</p>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
+
+                # Traffic conditions
+                st.markdown('<p class="section-title">🚦 Live traffic</p>',
+                            unsafe_allow_html=True)
+                if traffic:
+                    st.markdown(f"""
+                    <div class="info-grid">
+                        <div class="info-card">
+                            <p class="label">Congestion</p>
+                            <p class="value" style="color:{traffic['color']}">
+                            {traffic['level']}</p>
+                        </div>
+                        <div class="info-card">
+                            <p class="label">Delay vs free-flow</p>
+                            <p class="value">+{traffic['delay_min']} min</p>
+                        </div>
+                        <div class="info-card">
+                            <p class="label">Travel time now</p>
+                            <p class="value">{traffic['travel_time_min']} min</p>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    if incidents:
+                        for desc, ilat, ilon in incidents:
+                            st.markdown(f"""
+                            <div class="feature-card">
+                                <p class="feature-title">⚠️ Incident nearby</p>
+                                <p class="feature-desc">{desc}</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                    else:
+                        st.caption("No reported incidents along this route right now.")
+                else:
+                    st.info("Live traffic data unavailable right now — "
+                            "showing route without traffic adjustment.")
 
                 # ML Prediction
                 input_data = np.array([[
@@ -785,12 +947,17 @@ if location:
                 # AI route advice
                 with st.spinner("🤖 Getting AI route safety advice..."):
                     try:
+                        traffic_note = (
+                            f"{traffic['level']} traffic, +{traffic['delay_min']} "
+                            f"min delay vs free-flow" if traffic
+                            else "traffic data unavailable")
                         route_prompt = f"""You are an expert road safety advisor.
 A driver is traveling from {location_name[:40]} to {dest_name[:40]}.
 Conditions: {weather_desc}, {temp}°C, {wind_speed}km/h wind,
 {humidity}% humidity, {light_label}, {surface_label} road,
-{area_label} area. Risk score: {risk_score}/100.
-Driver hours since rest: {hours_driving} hours.
+{area_label} area. Live traffic: {traffic_note}.
+Risk score: {route_risk_score}/100.
+Driver hours since rest: {round(hours_driving, 1)} hours.
 Give exactly 4 specific safety tips for this journey.
 Each tip on a new line starting with an emoji.
 Keep it short and practical."""
@@ -814,20 +981,22 @@ Keep it short and practical."""
                     tooltip="You are here",
                     icon=folium.Icon(color='blue', icon='user', prefix='fa')
                 ).add_to(m)
-                st_folium(m, width=600, height=450, key="not_found_map")
+                st_folium(m, width=600, height=450,
+                          key="not_found_map", returned_objects=[])
                 st.error("Could not find destination. "
                          "Please try a more specific address.")
 
         else:
             # No new prediction was triggered on this rerun (e.g. the
-            # chatbot below or the fatigue slider caused this rerun).
-            # Show the previously computed route map if we have one,
-            # instead of resetting back to the plain default map.
+            # chatbot below or the 60s fatigue autorefresh caused this
+            # rerun). Show the previously computed route map if we have
+            # one, instead of resetting back to the plain default map.
             if st.session_state.get('route_active') and 'route_map' in st.session_state:
                 st_folium(st.session_state['route_map'],
                           width=600, height=450,
-                          key="persistent_map")
+                          key="persistent_map", returned_objects=[])
 
+                saved_risk = st.session_state.get('route_risk_score', risk_score)
                 st.markdown('<p class="section-title">Route summary</p>',
                             unsafe_allow_html=True)
                 st.markdown(f"""
@@ -854,29 +1023,59 @@ Keep it short and practical."""
                     </div>
                     <div class="info-card">
                         <p class="label">🚦 Risk Score</p>
-                        <p class="value">{risk_score}/100</p>
+                        <p class="value">{saved_risk}/100</p>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
+
+                saved_traffic = st.session_state.get('traffic')
+                if saved_traffic:
+                    st.markdown('<p class="section-title">🚦 Live traffic</p>',
+                                unsafe_allow_html=True)
+                    st.markdown(f"""
+                    <div class="info-grid">
+                        <div class="info-card">
+                            <p class="label">Congestion</p>
+                            <p class="value" style="color:{saved_traffic['color']}">
+                            {saved_traffic['level']}</p>
+                        </div>
+                        <div class="info-card">
+                            <p class="label">Delay vs free-flow</p>
+                            <p class="value">+{saved_traffic['delay_min']} min</p>
+                        </div>
+                        <div class="info-card">
+                            <p class="label">Travel time now</p>
+                            <p class="value">{saved_traffic['travel_time_min']} min</p>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
             else:
-                # Default map showing current location
-                m = folium.Map(location=[lat, lon],
-                               zoom_start=14,
-                               tiles='CartoDB positron')
-                folium.Marker(
-                    [lat, lon],
-                    popup="📍 You are here",
-                    tooltip="Your Location",
-                    icon=folium.Icon(color='blue', icon='user', prefix='fa')
-                ).add_to(m)
-                folium.Circle(
-                    [lat, lon],
-                    radius=500,
-                    color='#0C447C',
-                    fill=True,
-                    fill_opacity=0.1
-                ).add_to(m)
-                st_folium(m, width=600, height=450, key="default_map")
+                # Default map showing current location — cached in
+                # session_state so the 60s autorefresh tick doesn't rebuild
+                # (and remount / reset the zoom of) a brand new map object.
+                cache_key = (round(lat, 3), round(lon, 3))
+                if st.session_state.get('default_map_key') != cache_key:
+                    m = folium.Map(location=[lat, lon],
+                                   zoom_start=14,
+                                   tiles='CartoDB positron')
+                    folium.Marker(
+                        [lat, lon],
+                        popup="📍 You are here",
+                        tooltip="Your Location",
+                        icon=folium.Icon(color='blue', icon='user', prefix='fa')
+                    ).add_to(m)
+                    folium.Circle(
+                        [lat, lon],
+                        radius=500,
+                        color='#0C447C',
+                        fill=True,
+                        fill_opacity=0.1
+                    ).add_to(m)
+                    st.session_state['default_map'] = m
+                    st.session_state['default_map_key'] = cache_key
+
+                st_folium(st.session_state['default_map'], width=600, height=450,
+                          key="default_map", returned_objects=[])
                 st.info("👆 Enter your destination and click "
                         "Analyze Route to see the full route map.")
 
@@ -950,16 +1149,18 @@ st.markdown("""
     <p>
         AI Road Safety Advisor uses GPS to auto-detect your location,
         fetches real-time weather via OpenWeatherMap, determines road
-        conditions via OpenStreetMap, and predicts accident severity
-        using a Random Forest ML model trained on 1.8M UK road accident
-        records (90.58% accuracy). Features include live risk scoring,
-        interactive route maps, accident blackspot warnings, nearest
-        hospital detection, driver fatigue alerts, and AI-powered
-        route safety advice via Google Gemini.<br><br>
+        conditions via OpenStreetMap, checks live traffic congestion and
+        incidents via TomTom, and predicts accident severity using a
+        Random Forest ML model trained on 1.8M UK road accident records
+        (90.58% accuracy). Features include live risk scoring, real
+        road-following route maps, accident blackspot warnings, nearest
+        hospital detection, fully automatic driver fatigue tracking with
+        break alerts, and AI-powered route safety advice via Google
+        Gemini.<br><br>
         <strong>Dataset:</strong> UK Road Safety — data.gov.uk &nbsp;|&nbsp;
         <strong>Model:</strong> Random Forest Classifier &nbsp;|&nbsp;
         <strong>Built with:</strong> Python, Scikit-learn, Streamlit,
-        Folium, Gemini AI
+        Folium, TomTom, Gemini AI
     </p>
 </div>
 """, unsafe_allow_html=True)
