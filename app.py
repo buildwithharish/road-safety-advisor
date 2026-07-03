@@ -307,18 +307,17 @@ def get_light_condition(local_time):
 
 
 def get_destination_coords(destination):
-    """Geocode destination using Google Maps API"""
+    """Geocode destination using OpenStreetMap — completely free"""
     try:
-        url = (f"https://maps.googleapis.com/maps/api/geocode/json"
-               f"?address={destination}"
-               f"&key={st.secrets['GOOGLE_MAPS_API_KEY']}")
-        r = requests.get(url, timeout=5).json()
-        if r['status'] == 'OK':
-            result = r['results'][0]
-            dest_name = result['formatted_address']
-            dest_lat = result['geometry']['location']['lat']
-            dest_lng = result['geometry']['location']['lng']
-            return dest_name, dest_lat, dest_lng
+        url = (f"https://nominatim.openstreetmap.org/search"
+               f"?q={destination}&format=json&limit=1")
+        headers = {"User-Agent": "RoadSafetyAdvisor/1.0"}
+        r = requests.get(url, headers=headers, timeout=5).json()
+        if r:
+            dest_name = r[0]['display_name']
+            dest_lat = float(r[0]['lat'])
+            dest_lon = float(r[0]['lon'])
+            return dest_name, dest_lat, dest_lon
         return destination, None, None
     except Exception:
         return destination, None, None
