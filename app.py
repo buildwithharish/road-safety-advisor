@@ -565,11 +565,7 @@ col_d.metric("AI Chatbot", "Gemini AI")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# ── GPS fetch ─────────────────────────────────────
-st.markdown('<p class="section-title">📍 Step 1 — Allow GPS location access</p>',
-            unsafe_allow_html=True)
-st.info("Click the button below — your browser will ask for location permission. Click Allow.")
-
+# ── GPS fetch (silent, no visible step) ────────────
 location = get_geolocation()
 
 if location:
@@ -726,7 +722,7 @@ if location:
             st.rerun()
 
         # Destination input
-        st.markdown('<p class="section-title">🗺 Step 2 — Enter destination</p>',
+        st.markdown('<p class="section-title">🗺 Step 1 — Enter destination</p>',
                     unsafe_allow_html=True)
         destination = st.text_input(
             "Where are you going?",
