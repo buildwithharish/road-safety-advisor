@@ -5,3 +5,7 @@ pandas
 google-generativeai
 streamlit-js-eval
 requests
+folium
+streamlit-folium
+timezonefinder
+pytz
