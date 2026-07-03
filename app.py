@@ -386,4 +386,173 @@ if location:
                     unsafe_allow_html=True)
         st.markdown(f"""
         <div class="info-grid">
-            <div
+            <div class="info-card">
+                <p class="label">📍 From</p>
+                <p class="value">{location_name[:30]}...</p>
+            </div>
+            <div class="info-card">
+                <p class="label">🏁 To</p>
+                <p class="value">{dest_name[:30]}...</p>
+            </div>
+            <div class="info-card">
+                <p class="label">⏰ Time</p>
+                <p class="value">{datetime.now().strftime('%I:%M %p')}</p>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Show risk meter and result
+        st.markdown('<p class="section-title">Risk assessment</p>',
+                    unsafe_allow_html=True)
+
+        if result == 1:
+            st.markdown(f"""
+            <div class="meter-wrap">
+                <div class="meter-seg" style="background:#97C459"></div>
+                <div class="meter-seg" style="background:#EF9F27;opacity:.3"></div>
+                <div class="meter-seg" style="background:#E24B4A;opacity:.3"></div>
+            </div>
+            <div class="meter-labels">
+                <span>Low</span><span>Medium</span><span>High</span>
+            </div>
+            <div class="result-low">
+                <p class="title">✅ Low risk — Safe to travel
+                <small style="font-weight:400;font-size:12px">
+                ({confidence}% confident)</small></p>
+                <p class="desc">Follow speed limits. Stay alert. Wear your seatbelt.</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        elif result == 2:
+            st.markdown(f"""
+            <div class="meter-wrap">
+                <div class="meter-seg" style="background:#97C459;opacity:.3"></div>
+                <div class="meter-seg" style="background:#EF9F27"></div>
+                <div class="meter-seg" style="background:#E24B4A;opacity:.3"></div>
+            </div>
+            <div class="meter-labels">
+                <span>Low</span><span>Medium</span><span>High</span>
+            </div>
+            <div class="result-mid">
+                <p class="title">⚠️ Medium risk — Drive carefully
+                <small style="font-weight:400;font-size:12px">
+                ({confidence}% confident)</small></p>
+                <p class="desc">Reduce speed. Maintain safe distance. Avoid distractions.</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        else:
+            st.markdown(f"""
+            <div class="meter-wrap">
+                <div class="meter-seg" style="background:#97C459;opacity:.3"></div>
+                <div class="meter-seg" style="background:#EF9F27;opacity:.3"></div>
+                <div class="meter-seg" style="background:#E24B4A"></div>
+            </div>
+            <div class="meter-labels">
+                <span>Low</span><span>Medium</span><span>High</span>
+            </div>
+            <div class="result-high">
+                <p class="title">🚨 High risk — Avoid travel if possible
+                <small style="font-weight:400;font-size:12px">
+                ({confidence}% confident)</small></p>
+                <p class="desc">Postpone journey. If urgent, drive very slowly on main roads only.</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # ── AI route safety tip ───────────────────
+        with st.spinner("Getting AI safety advice for your route..."):
+            try:
+                route_prompt = f"""You are a road safety advisor.
+A driver is traveling from {location_name[:50]} to {dest_name[:50]}.
+Current conditions: {weather_label}, {light_label}, {surface_label} road, {area_label} area, {temp}°C.
+Risk level: {'Low' if result==1 else 'Medium' if result==2 else 'High'}.
+Give 3 specific safety tips for this exact journey. Keep it short and practical."""
+
+                route_response = gemini.generate_content(route_prompt)
+                if route_response and route_response.text:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    st.markdown('<p class="section-title">🤖 AI safety advice for your route</p>',
+                                unsafe_allow_html=True)
+                    st.info(route_response.text)
+            except Exception:
+                pass
+
+else:
+    st.warning("👆 Please allow location access when your browser asks for it.")
+    st.markdown("""
+    **How to allow location:**
+    - A popup appears at the top of your browser
+    - Click **Allow**
+    - The app will automatically fetch your GPS coordinates
+    """)
+
+# ── Chatbot section ───────────────────────────────
+st.markdown("<br>", unsafe_allow_html=True)
+st.markdown('<div class="chat-header">💬 Road Safety AI Chatbot — Ask me anything</div>',
+            unsafe_allow_html=True)
+st.markdown("<br>", unsafe_allow_html=True)
+
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+for msg in st.session_state.messages:
+    st.chat_message(msg["role"]).write(msg["content"])
+
+user_input = st.chat_input("Ask a road safety question...")
+
+if user_input:
+    st.chat_message("user").write(user_input)
+    st.session_state.messages.append({
+        "role": "user",
+        "content": user_input
+    })
+
+    history = ""
+    for msg in st.session_state.messages[:-1]:
+        role = "User" if msg["role"] == "user" else "Bot"
+        history += f"{role}: {msg['content']}\n"
+
+    with st.spinner("Thinking..."):
+        prompt = f"""You are a helpful road safety advisor chatbot.
+Only answer questions related to road safety, driving tips,
+accident prevention, traffic rules, and vehicle safety.
+Keep answers short, clear and practical (max 4 lines).
+If the question is not about road safety, politely say
+you can only help with road safety topics.
+
+Conversation so far:
+{history}
+User: {user_input}
+Bot:"""
+        try:
+            response = gemini.generate_content(prompt)
+            if response and response.text:
+                bot_reply = response.text
+            else:
+                bot_reply = "Sorry, I could not generate a response. Please try asking differently."
+        except Exception:
+            bot_reply = "Sorry, I had trouble answering that. Please try rephrasing your question."
+
+    st.chat_message("assistant").write(bot_reply)
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": bot_reply
+    })
+
+# ── About section ─────────────────────────────────
+st.markdown("<br>", unsafe_allow_html=True)
+st.markdown("""
+<div class="about-box">
+    <h4>About this project</h4>
+    <p>
+        AI Road Safety Advisor automatically detects your GPS location,
+        fetches real-time weather and road conditions, and predicts accident
+        severity using a Random Forest ML model trained on 1.8M UK road
+        accident records (90.58% accuracy). Powered by Google Gemini AI
+        for intelligent route-specific safety recommendations.<br><br>
+        <strong>Dataset:</strong> UK Road Safety — data.gov.uk &nbsp;|&nbsp;
+        <strong>Model:</strong> Random Forest Classifier &nbsp;|&nbsp;
+        <strong>Built with:</strong> Python, Scikit-learn, Streamlit, Gemini AI
+    </p>
+</div>
+""", unsafe_allow_html=True)
