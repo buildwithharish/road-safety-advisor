@@ -209,11 +209,28 @@ except Exception:
     st.stop()
 
 # ── Gemini AI setup ───────────────────────────────
-try:
+@st.cache_resource(show_spinner=False)
+def init_gemini():
+    """Set up Gemini once per session — avoids re-listing models on every
+    60s autorefresh rerun, and prefers a fast, generous-quota model over
+    whatever the API happens to list first."""
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    available_models = [m.name for m in genai.list_models()
-                        if 'generateContent' in m.supported_generation_methods]
-    gemini = genai.GenerativeModel(available_models[0])
+    preferred = [
+        "models/gemini-2.0-flash", "models/gemini-1.5-flash",
+        "models/gemini-1.5-flash-latest", "models/gemini-1.5-flash-002",
+        "models/gemini-pro",
+    ]
+    available = [m.name for m in genai.list_models()
+                 if 'generateContent' in m.supported_generation_methods]
+    for name in preferred:
+        if name in available:
+            return genai.GenerativeModel(name), name
+    if available:
+        return genai.GenerativeModel(available[0]), available[0]
+    raise RuntimeError("No Gemini model supports generateContent")
+
+try:
+    gemini, gemini_model_name = init_gemini()
 except Exception:
     st.error("Gemini API key error. Check your Streamlit secrets.")
     st.stop()
@@ -1204,11 +1221,18 @@ User: {user_input}
 Bot:"""
         try:
             response = gemini.generate_content(prompt)
-            bot_reply = (response.text if response and response.text
-                         else "Sorry, please try asking differently.")
-        except Exception:
+            if response and response.candidates and response.text:
+                bot_reply = response.text
+            else:
+                reason = ""
+                if response and response.candidates:
+                    reason = f" (finish_reason: {response.candidates[0].finish_reason})"
+                bot_reply = f"Sorry, I couldn't generate a response{reason}. Please try rephrasing."
+        except Exception as e:
             bot_reply = ("Sorry, I had trouble answering that. "
                          "Please try rephrasing.")
+            with st.expander("⚙️ Debug info (error detail)"):
+                st.code(f"{type(e).__name__}: {e}")
 
     st.chat_message("assistant").write(bot_reply)
     st.session_state.messages.append({
