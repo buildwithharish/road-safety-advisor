@@ -357,9 +357,118 @@ def calculate_risk_score(weather_code, light_code,
     return min(score, 100)
 
 
+def get_road_route(src_lat, src_lon, dest_lat, dest_lon):
+    """Get actual road route coordinates using OSRM — completely free"""
+    try:
+        url = (f"http://router.project-osrm.org/route/v1/driving/"
+               f"{src_lon},{src_lat};{dest_lon},{dest_lat}"
+               f"?overview=full&geometries=geojson")
+        r = requests.get(url, timeout=10).json()
+        if r['code'] == 'Ok':
+            coords = r['routes'][0]['geometry']['coordinates']
+            # OSRM returns [lon, lat] — flip to [lat, lon] for folium
+            route_coords = [[c[1], c[0]] for c in coords]
+            distance = round(r['routes'][0]['distance'] / 1000, 1)
+            duration = round(r['routes'][0]['duration'] / 60)
+            return route_coords, distance, duration
+        return None, 0, 0
+    except Exception:
+        return None, 0, 0
+
+
 def build_route_map(src_lat, src_lon, src_name,
                     dest_lat, dest_lon, dest_name,
                     hospitals, risk_score):
+    """Build interactive Folium map with real road route"""
+    center_lat = (src_lat + dest_lat) / 2
+    center_lon = (src_lon + dest_lon) / 2
+
+    m = folium.Map(
+        location=[center_lat, center_lon],
+        zoom_start=12,
+        tiles='CartoDB positron'
+    )
+
+    # Get real road route
+    route_coords, distance, duration = get_road_route(
+        src_lat, src_lon, dest_lat, dest_lon)
+
+    # Route color based on risk
+    route_color = ('#27500A' if risk_score < 35
+                   else '#854F0B' if risk_score < 65
+                   else '#791F1F')
+
+    # Draw real road route or fallback to straight line
+    if route_coords:
+        folium.PolyLine(
+            route_coords,
+            color=route_color,
+            weight=6,
+            opacity=0.85,
+            tooltip=f"🛣 Route | Risk: {risk_score}/100 | "
+                    f"{distance}km | ~{duration} mins"
+        ).add_to(m)
+
+        # Add blackspot warning at midpoint if high risk
+        if risk_score > 50 and len(route_coords) > 2:
+            mid = route_coords[len(route_coords) // 2]
+            folium.Marker(
+                mid,
+                popup=folium.Popup(
+                    f"⚠️ Accident Blackspot Zone<br>"
+                    f"Risk Score: {risk_score}/100",
+                    max_width=200),
+                tooltip="⚠️ High Risk Zone",
+                icon=folium.Icon(
+                    color='orange',
+                    icon='warning-sign',
+                    prefix='glyphicon')
+            ).add_to(m)
+    else:
+        # Fallback straight line
+        folium.PolyLine(
+            [[src_lat, src_lon], [dest_lat, dest_lon]],
+            color=route_color,
+            weight=5,
+            opacity=0.8
+        ).add_to(m)
+
+    # Source marker
+    folium.Marker(
+        [src_lat, src_lon],
+        popup=folium.Popup(
+            f"📍 You are here<br>{src_name[:40]}",
+            max_width=200),
+        tooltip="Your Location",
+        icon=folium.Icon(color='blue', icon='user', prefix='fa')
+    ).add_to(m)
+
+    # Destination marker
+    folium.Marker(
+        [dest_lat, dest_lon],
+        popup=folium.Popup(
+            f"🏁 Destination<br>{dest_name[:40]}",
+            max_width=200),
+        tooltip="Destination",
+        icon=folium.Icon(color='green', icon='flag', prefix='fa')
+    ).add_to(m)
+
+    # Hospital markers
+    for name, hlat, hlon in hospitals:
+        folium.Marker(
+            [hlat, hlon],
+            popup=folium.Popup(f"🏥 {name}", max_width=200),
+            tooltip=f"Hospital: {name}",
+            icon=folium.Icon(
+                color='red',
+                icon='plus-sign',
+                prefix='glyphicon')
+        ).add_to(m)
+
+    # Fit map to show full route
+    m.fit_bounds([[src_lat, src_lon], [dest_lat, dest_lon]])
+
+    return m, distance, duration
     """Build interactive Folium map with route and markers"""
     center_lat = (src_lat + dest_lat) / 2
     center_lon = (src_lon + dest_lon) / 2
