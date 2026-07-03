@@ -469,72 +469,6 @@ def build_route_map(src_lat, src_lon, src_name,
     m.fit_bounds([[src_lat, src_lon], [dest_lat, dest_lon]])
 
     return m, distance, duration
-    """Build interactive Folium map with route and markers"""
-    center_lat = (src_lat + dest_lat) / 2
-    center_lon = (src_lon + dest_lon) / 2
-
-    m = folium.Map(
-        location=[center_lat, center_lon],
-        zoom_start=12,
-        tiles='CartoDB positron'
-    )
-
-    # Source marker
-    folium.Marker(
-        [src_lat, src_lon],
-        popup=folium.Popup(f"📍 You are here<br>{src_name[:40]}", max_width=200),
-        tooltip="Your Location",
-        icon=folium.Icon(color='blue', icon='user', prefix='fa')
-    ).add_to(m)
-
-    # Destination marker
-    folium.Marker(
-        [dest_lat, dest_lon],
-        popup=folium.Popup(f"🏁 Destination<br>{dest_name[:40]}", max_width=200),
-        tooltip="Destination",
-        icon=folium.Icon(color='green', icon='flag', prefix='fa')
-    ).add_to(m)
-
-    # Route line
-    route_color = ('#27500A' if risk_score < 35
-                   else '#854F0B' if risk_score < 65
-                   else '#791F1F')
-    folium.PolyLine(
-        [[src_lat, src_lon], [dest_lat, dest_lon]],
-        color=route_color,
-        weight=5,
-        opacity=0.8,
-        tooltip=f"Risk score: {risk_score}/100"
-    ).add_to(m)
-
-    # Midpoint blackspot warning
-    mid_lat = (src_lat + dest_lat) / 2
-    mid_lon = (src_lon + dest_lon) / 2
-    if risk_score > 50:
-        folium.Marker(
-            [mid_lat, mid_lon],
-            popup=folium.Popup(
-                f"⚠️ Accident Blackspot Zone<br>Risk Score: {risk_score}/100",
-                max_width=200),
-            tooltip="⚠️ High Risk Zone",
-            icon=folium.Icon(color='red', icon='warning-sign',
-                              prefix='glyphicon')
-        ).add_to(m)
-
-    # Hospital markers
-    for name, hlat, hlon in hospitals:
-        folium.Marker(
-            [hlat, hlon],
-            popup=folium.Popup(f"🏥 {name}", max_width=200),
-            tooltip=f"Hospital: {name}",
-            icon=folium.Icon(color='red', icon='plus-sign',
-                              prefix='glyphicon')
-        ).add_to(m)
-
-    # Fit bounds
-    m.fit_bounds([[src_lat, src_lon], [dest_lat, dest_lon]])
-
-    return m
 
 
 # ── App header ────────────────────────────────────
@@ -707,13 +641,24 @@ if location:
                 hospitals = get_nearest_hospitals(lat, lon)
 
             if dest_lat and dest_lon:
-                # Build and show map
-                route_map = build_route_map(
+                # Build map (unpack distance/duration from OSRM)
+                route_map, distance, duration = build_route_map(
                     lat, lon, location_name,
                     dest_lat, dest_lon, dest_name,
                     hospitals, risk_score
                 )
-                st_folium(route_map, width=600, height=450)
+
+                # Persist everything needed to redraw this map on future
+                # reruns (e.g. when the chatbot or slider triggers a rerun)
+                st.session_state['route_map'] = route_map
+                st.session_state['distance'] = distance
+                st.session_state['duration'] = duration
+                st.session_state['route_active'] = True
+                st.session_state['location_name'] = location_name
+                st.session_state['dest_name'] = dest_name
+                st.session_state['departure_time'] = local_time.strftime('%I:%M %p')
+
+                st_folium(route_map, width=600, height=450, key="persistent_map")
 
                 # Route summary
                 st.markdown('<p class="section-title">Route summary</p>',
@@ -731,6 +676,18 @@ if location:
                     <div class="info-card">
                         <p class="label">⏰ Departure</p>
                         <p class="value">{local_time.strftime('%I:%M %p')}</p>
+                    </div>
+                    <div class="info-card">
+                        <p class="label">📏 Distance</p>
+                        <p class="value">{distance} km</p>
+                    </div>
+                    <div class="info-card">
+                        <p class="label">⏱ Est. Time</p>
+                        <p class="value">~{duration} mins</p>
+                    </div>
+                    <div class="info-card">
+                        <p class="label">🚦 Risk Score</p>
+                        <p class="value">{risk_score}/100</p>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -857,31 +814,71 @@ Keep it short and practical."""
                     tooltip="You are here",
                     icon=folium.Icon(color='blue', icon='user', prefix='fa')
                 ).add_to(m)
-                st_folium(m, width=600, height=450)
+                st_folium(m, width=600, height=450, key="not_found_map")
                 st.error("Could not find destination. "
                          "Please try a more specific address.")
 
         else:
-            # Default map showing current location
-            m = folium.Map(location=[lat, lon],
-                           zoom_start=14,
-                           tiles='CartoDB positron')
-            folium.Marker(
-                [lat, lon],
-                popup="📍 You are here",
-                tooltip="Your Location",
-                icon=folium.Icon(color='blue', icon='user', prefix='fa')
-            ).add_to(m)
-            folium.Circle(
-                [lat, lon],
-                radius=500,
-                color='#0C447C',
-                fill=True,
-                fill_opacity=0.1
-            ).add_to(m)
-            st_folium(m, width=600, height=450)
-            st.info("👆 Enter your destination and click "
-                    "Analyze Route to see the full route map.")
+            # No new prediction was triggered on this rerun (e.g. the
+            # chatbot below or the fatigue slider caused this rerun).
+            # Show the previously computed route map if we have one,
+            # instead of resetting back to the plain default map.
+            if st.session_state.get('route_active') and 'route_map' in st.session_state:
+                st_folium(st.session_state['route_map'],
+                          width=600, height=450,
+                          key="persistent_map")
+
+                st.markdown('<p class="section-title">Route summary</p>',
+                            unsafe_allow_html=True)
+                st.markdown(f"""
+                <div class="info-grid">
+                    <div class="info-card">
+                        <p class="label">📍 From</p>
+                        <p class="value">{st.session_state.get('location_name', '')[:25]}...</p>
+                    </div>
+                    <div class="info-card">
+                        <p class="label">🏁 To</p>
+                        <p class="value">{st.session_state.get('dest_name', '')[:25]}...</p>
+                    </div>
+                    <div class="info-card">
+                        <p class="label">⏰ Departure</p>
+                        <p class="value">{st.session_state.get('departure_time', '')}</p>
+                    </div>
+                    <div class="info-card">
+                        <p class="label">📏 Distance</p>
+                        <p class="value">{st.session_state.get('distance', 0)} km</p>
+                    </div>
+                    <div class="info-card">
+                        <p class="label">⏱ Est. Time</p>
+                        <p class="value">~{st.session_state.get('duration', 0)} mins</p>
+                    </div>
+                    <div class="info-card">
+                        <p class="label">🚦 Risk Score</p>
+                        <p class="value">{risk_score}/100</p>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                # Default map showing current location
+                m = folium.Map(location=[lat, lon],
+                               zoom_start=14,
+                               tiles='CartoDB positron')
+                folium.Marker(
+                    [lat, lon],
+                    popup="📍 You are here",
+                    tooltip="Your Location",
+                    icon=folium.Icon(color='blue', icon='user', prefix='fa')
+                ).add_to(m)
+                folium.Circle(
+                    [lat, lon],
+                    radius=500,
+                    color='#0C447C',
+                    fill=True,
+                    fill_opacity=0.1
+                ).add_to(m)
+                st_folium(m, width=600, height=450, key="default_map")
+                st.info("👆 Enter your destination and click "
+                        "Analyze Route to see the full route map.")
 
 else:
     st.warning("👆 Please allow location access when your browser asks.")
