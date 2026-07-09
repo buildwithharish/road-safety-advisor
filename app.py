@@ -1183,7 +1183,7 @@ with tab3:
         '🌦 24-hour weather risk forecast</p>',
         unsafe_allow_html=True)
 
-    location2 = get_geolocation()
+    location2 = get_geolocation(key="tab3_location")location2 = get_geolocation(key="tab3_location")
 
     if location2:
         lat2 = location2['coords']['latitude']
