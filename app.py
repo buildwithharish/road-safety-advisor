@@ -22,14 +22,21 @@ st.set_page_config(
     layout="wide"
 )
 
-# ── Custom CSS ────────────────────────────────────
+# ── Custom CSS — warm terracotta/amber theme ──────
 st.markdown("""
 <style>
+    [data-testid="stAppViewContainer"] {
+        background: #FBF3E7;
+    }
+    [data-testid="stHeader"] {
+        background: rgba(0,0,0,0);
+    }
     .main-header {
-        background: linear-gradient(135deg, #0C447C, #185FA5);
+        background: linear-gradient(135deg, #A8431F, #E8963C);
         padding: 24px 28px;
         border-radius: 12px;
         margin-bottom: 24px;
+        box-shadow: 0 4px 18px rgba(168,67,31,0.25);
     }
     .main-header h1 {
         color: white;
@@ -38,7 +45,7 @@ st.markdown("""
         margin: 0;
     }
     .main-header p {
-        color: rgba(255,255,255,0.75);
+        color: rgba(255,255,255,0.85);
         font-size: 14px;
         margin: 4px 0 0;
     }
@@ -47,7 +54,7 @@ st.markdown("""
         font-weight: 600;
         letter-spacing: 0.06em;
         text-transform: uppercase;
-        color: #888780;
+        color: #9C7B57;
         margin-bottom: 12px;
         margin-top: 16px;
     }
@@ -58,28 +65,33 @@ st.markdown("""
         margin-bottom: 16px;
     }
     .info-card {
-        background: #F1EFE8;
-        border: 0.5px solid #D3D1C7;
+        background: #FDF6EB;
+        border: 0.5px solid #EAD3AA;
         border-radius: 10px;
         padding: 12px 14px;
         text-align: center;
+        transition: border-color 0.2s ease;
+    }
+    .info-card:hover {
+        border-color: #E8963C;
     }
     .info-card .label {
         font-size: 11px;
-        color: #888780;
+        color: #A9835A;
         margin: 0 0 4px;
         text-transform: uppercase;
         letter-spacing: 0.04em;
     }
     .info-card .value {
         font-size: 14px;
-        font-weight: 500;
-        color: #1A1917;
+        font-weight: 600;
+        color: #3A2416;
         margin: 0;
     }
     .feature-card {
-        background: #F8F7F2;
-        border: 0.5px solid #D3D1C7;
+        background: #FEF9F0;
+        border: 0.5px solid #EAD3AA;
+        border-left: 3px solid #E8963C;
         border-radius: 10px;
         padding: 14px 16px;
         margin-bottom: 10px;
@@ -87,12 +99,12 @@ st.markdown("""
     .feature-title {
         font-size: 13px;
         font-weight: 600;
-        color: #1A1917;
+        color: #3A2416;
         margin: 0 0 4px;
     }
     .feature-desc {
         font-size: 12px;
-        color: #5F5E5A;
+        color: #7A6047;
         margin: 0;
         line-height: 1.5;
     }
@@ -110,38 +122,38 @@ st.markdown("""
         display: flex;
         justify-content: space-between;
         font-size: 11px;
-        color: #888780;
+        color: #A9835A;
         margin-bottom: 16px;
     }
     .result-low {
-        background: #EAF3DE;
-        border: 0.5px solid #C0DD97;
+        background: #EDF3DC;
+        border: 0.5px solid #B7D488;
         border-radius: 10px;
         padding: 14px 18px;
         margin: 12px 0;
     }
     .result-mid {
-        background: #FAEEDA;
-        border: 0.5px solid #FAC775;
+        background: #FBEBD4;
+        border: 0.5px solid #F0B458;
         border-radius: 10px;
         padding: 14px 18px;
         margin: 12px 0;
     }
     .result-high {
-        background: #FCEBEB;
-        border: 0.5px solid #F7C1C1;
+        background: #FBE5DD;
+        border: 0.5px solid #E8916F;
         border-radius: 10px;
         padding: 14px 18px;
         margin: 12px 0;
     }
-    .result-low .title  { color: #27500A; font-weight: 600; font-size: 15px; margin: 0 0 4px; }
-    .result-mid .title  { color: #633806; font-weight: 600; font-size: 15px; margin: 0 0 4px; }
-    .result-high .title { color: #791F1F; font-weight: 600; font-size: 15px; margin: 0 0 4px; }
-    .result-low .desc   { color: #3B6D11; font-size: 13px; margin: 0; }
-    .result-mid .desc   { color: #854F0B; font-size: 13px; margin: 0; }
-    .result-high .desc  { color: #A32D2D; font-size: 13px; margin: 0; }
+    .result-low .title  { color: #365E14; font-weight: 600; font-size: 15px; margin: 0 0 4px; }
+    .result-mid .title  { color: #7A4B0A; font-weight: 600; font-size: 15px; margin: 0 0 4px; }
+    .result-high .title { color: #96341B; font-weight: 600; font-size: 15px; margin: 0 0 4px; }
+    .result-low .desc   { color: #4A7A1E; font-size: 13px; margin: 0; }
+    .result-mid .desc   { color: #A0680F; font-size: 13px; margin: 0; }
+    .result-high .desc  { color: #B94E2C; font-size: 13px; margin: 0; }
     .stButton > button {
-        background: #0C447C !important;
+        background: linear-gradient(135deg, #A8431F, #E8963C) !important;
         color: white !important;
         border: none !important;
         border-radius: 8px !important;
@@ -149,12 +161,13 @@ st.markdown("""
         font-size: 15px !important;
         font-weight: 500 !important;
         width: 100% !important;
+        transition: filter 0.15s ease !important;
     }
     .stButton > button:hover {
-        background: #185FA5 !important;
+        filter: brightness(1.08) !important;
     }
     .chat-header {
-        background: #0C447C;
+        background: linear-gradient(135deg, #A8431F, #E8963C);
         color: white;
         padding: 12px 16px;
         border-radius: 10px 10px 0 0;
@@ -162,8 +175,8 @@ st.markdown("""
         font-weight: 500;
     }
     .about-box {
-        background: #F1EFE8;
-        border: 0.5px solid #D3D1C7;
+        background: #FDF6EB;
+        border: 0.5px solid #EAD3AA;
         border-radius: 10px;
         padding: 16px 20px;
         margin-top: 20px;
@@ -171,22 +184,23 @@ st.markdown("""
     .about-box h4 {
         font-size: 13px;
         font-weight: 600;
-        color: #444441;
+        color: #3A2416;
         margin: 0 0 8px;
     }
     .about-box p {
         font-size: 12px;
-        color: #5F5E5A;
+        color: #7A6047;
         margin: 0;
         line-height: 1.6;
     }
     .risk-score-box {
-        background: linear-gradient(135deg, #0C447C, #185FA5);
+        background: linear-gradient(135deg, #8C3A16, #E8963C);
         border-radius: 12px;
         padding: 20px;
         text-align: center;
         color: white;
         margin-bottom: 16px;
+        box-shadow: 0 4px 18px rgba(140,58,22,0.25);
     }
     .risk-score-num {
         font-size: 48px;
@@ -196,11 +210,11 @@ st.markdown("""
     }
     .risk-score-label {
         font-size: 13px;
-        opacity: 0.8;
+        opacity: 0.85;
         margin: 4px 0 0;
     }
     .profile-box {
-        background: linear-gradient(135deg, #1a1a2e, #16213e);
+        background: linear-gradient(135deg, #3A2416, #6B4226);
         border-radius: 12px;
         padding: 16px 20px;
         color: white;
@@ -214,21 +228,20 @@ st.markdown("""
     }
     .profile-box p {
         font-size: 12px;
-        opacity: 0.8;
+        opacity: 0.85;
         margin: 0 0 4px;
         color: white;
     }
     .forecast-card {
-        background: var(--color-background-primary);
-        border: 0.5px solid var(--color-border-tertiary);
+        background: #FDF6EB;
+        border: 0.5px solid #EAD3AA;
         border-radius: 8px;
         padding: 10px 12px;
         text-align: center;
         margin-bottom: 6px;
     }
-    hr { border-color: #D3D1C7 !important; }
-</style>
-""", unsafe_allow_html=True)
+    hr { border-color: #EAD3AA !important; }
+</style>""", unsafe_allow_html=True)
 
 # ── Load ML model ─────────────────────────────────
 try:
