@@ -23,224 +23,377 @@ st.set_page_config(
 )
 
 # ── Custom CSS — warm terracotta/amber theme ──────
+# Premium pass: type system, elevation tokens, refined components,
+# styled tabs/chat/alerts. Palette unchanged, execution upgraded.
 st.markdown("""
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
+    :root {
+        --clr-bg: #FBF3E7;
+        --clr-card: #FDF6EB;
+        --clr-card-alt: #FEF9F0;
+        --clr-border: #EAD3AA;
+        --clr-terracotta: #A8431F;
+        --clr-amber: #E8963C;
+        --clr-ink: #3A2416;
+        --clr-muted: #7A6047;
+        --clr-label: #9C7B57;
+        --shadow-sm: 0 1px 2px rgba(58,36,22,0.05), 0 1px 1px rgba(58,36,22,0.04);
+        --shadow-md: 0 6px 20px -4px rgba(58,36,22,0.14), 0 2px 6px rgba(58,36,22,0.06);
+        --shadow-lift: 0 12px 28px -6px rgba(58,36,22,0.20);
+        --radius: 14px;
+        --radius-sm: 10px;
+        --ease: cubic-bezier(.22,.61,.36,1);
+    }
+    @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+    }
+
+    html, body, [class*="css"] {
+        font-family: 'Manrope', -apple-system, sans-serif;
+    }
     [data-testid="stAppViewContainer"] {
-        background: #FBF3E7;
+        background: var(--clr-bg);
     }
-    [data-testid="stHeader"] {
-        background: rgba(0,0,0,0);
+    [data-testid="stHeader"] { background: rgba(0,0,0,0); }
+    section[data-testid="stSidebar"] {
+        background: var(--clr-card);
+        border-right: 1px solid var(--clr-border);
     }
+
+    /* ── Hero header ─────────────────────────────── */
     .main-header {
-        background: linear-gradient(135deg, #A8431F, #E8963C);
-        padding: 24px 28px;
-        border-radius: 12px;
-        margin-bottom: 24px;
-        box-shadow: 0 4px 18px rgba(168,67,31,0.25);
+        background: linear-gradient(135deg, var(--clr-terracotta), var(--clr-amber));
+        padding: 30px 32px;
+        border-radius: 20px;
+        margin-bottom: 26px;
+        box-shadow: var(--shadow-md);
+        position: relative;
+        overflow: hidden;
+    }
+    .main-header::after {
+        content: "";
+        position: absolute; inset: 0;
+        background: radial-gradient(circle at 88% -10%, rgba(255,255,255,0.20), transparent 55%);
+        pointer-events: none;
     }
     .main-header h1 {
+        font-family: 'Fraunces', serif;
         color: white;
-        font-size: 26px;
+        font-size: 30px;
         font-weight: 600;
+        letter-spacing: -0.01em;
         margin: 0;
     }
     .main-header p {
-        color: rgba(255,255,255,0.85);
+        color: rgba(255,255,255,0.88);
         font-size: 14px;
-        margin: 4px 0 0;
+        margin: 6px 0 0;
+        max-width: 640px;
     }
+
+    /* ── Section labels ──────────────────────────── */
     .section-title {
-        font-size: 12px;
-        font-weight: 600;
-        letter-spacing: 0.06em;
+        font-size: 11.5px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
         text-transform: uppercase;
-        color: #9C7B57;
+        color: var(--clr-label);
         margin-bottom: 12px;
-        margin-top: 16px;
+        margin-top: 20px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
+    .section-title::before {
+        content: "";
+        width: 6px; height: 6px;
+        border-radius: 50%;
+        background: var(--clr-amber);
+        display: inline-block;
+    }
+
+    /* ── Info cards ──────────────────────────────── */
     .info-grid {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
-        gap: 10px;
-        margin-bottom: 16px;
+        gap: 12px;
+        margin-bottom: 18px;
     }
     .info-card {
-        background: #FDF6EB;
-        border: 0.5px solid #EAD3AA;
-        border-radius: 10px;
-        padding: 12px 14px;
+        background: var(--clr-card);
+        border: 1px solid var(--clr-border);
+        border-radius: var(--radius-sm);
+        padding: 14px 16px;
         text-align: center;
-        transition: border-color 0.2s ease;
+        box-shadow: var(--shadow-sm);
+        transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease), border-color 0.2s var(--ease);
     }
     .info-card:hover {
-        border-color: #E8963C;
+        border-color: var(--clr-amber);
+        box-shadow: var(--shadow-md);
+        transform: translateY(-2px);
     }
     .info-card .label {
-        font-size: 11px;
-        color: #A9835A;
-        margin: 0 0 4px;
+        font-size: 10.5px;
+        color: var(--clr-label);
+        margin: 0 0 6px;
         text-transform: uppercase;
-        letter-spacing: 0.04em;
+        letter-spacing: 0.05em;
+        font-weight: 700;
     }
     .info-card .value {
+        font-family: 'JetBrains Mono', monospace;
         font-size: 14px;
         font-weight: 600;
-        color: #3A2416;
+        color: var(--clr-ink);
         margin: 0;
+        letter-spacing: -0.01em;
     }
+
+    /* ── Feature / incident cards ────────────────── */
     .feature-card {
-        background: #FEF9F0;
-        border: 0.5px solid #EAD3AA;
-        border-left: 3px solid #E8963C;
-        border-radius: 10px;
+        background: var(--clr-card-alt);
+        border: 1px solid var(--clr-border);
+        border-left: 3px solid var(--clr-amber);
+        border-radius: var(--radius-sm);
         padding: 14px 16px;
         margin-bottom: 10px;
+        box-shadow: var(--shadow-sm);
+        transition: transform 0.2s var(--ease);
     }
+    .feature-card:hover { transform: translateX(2px); }
     .feature-title {
         font-size: 13px;
-        font-weight: 600;
-        color: #3A2416;
+        font-weight: 700;
+        color: var(--clr-ink);
         margin: 0 0 4px;
     }
     .feature-desc {
-        font-size: 12px;
-        color: #7A6047;
+        font-size: 12.5px;
+        color: var(--clr-muted);
         margin: 0;
-        line-height: 1.5;
+        line-height: 1.55;
     }
-    .meter-wrap {
-        display: flex;
-        gap: 6px;
-        margin: 8px 0 4px;
-    }
-    .meter-seg {
-        flex: 1;
-        height: 10px;
-        border-radius: 99px;
-    }
+
+    /* ── Meters ───────────────────────────────────── */
+    .meter-wrap { display: flex; gap: 6px; margin: 8px 0 4px; }
+    .meter-seg { flex: 1; height: 8px; border-radius: 99px; }
     .meter-labels {
-        display: flex;
-        justify-content: space-between;
-        font-size: 11px;
-        color: #A9835A;
-        margin-bottom: 16px;
+        display: flex; justify-content: space-between;
+        font-size: 11px; color: var(--clr-label); margin-bottom: 16px;
     }
-    .result-low {
-        background: #EDF3DC;
-        border: 0.5px solid #B7D488;
-        border-radius: 10px;
-        padding: 14px 18px;
-        margin: 12px 0;
+
+    /* ── Result banners (severity semantics kept) ─── */
+    .result-low, .result-mid, .result-high {
+        border-radius: var(--radius); padding: 16px 20px; margin: 14px 0;
+        box-shadow: var(--shadow-sm);
     }
-    .result-mid {
-        background: #FBEBD4;
-        border: 0.5px solid #F0B458;
-        border-radius: 10px;
-        padding: 14px 18px;
-        margin: 12px 0;
-    }
-    .result-high {
-        background: #FBE5DD;
-        border: 0.5px solid #E8916F;
-        border-radius: 10px;
-        padding: 14px 18px;
-        margin: 12px 0;
-    }
-    .result-low .title  { color: #365E14; font-weight: 600; font-size: 15px; margin: 0 0 4px; }
-    .result-mid .title  { color: #7A4B0A; font-weight: 600; font-size: 15px; margin: 0 0 4px; }
-    .result-high .title { color: #96341B; font-weight: 600; font-size: 15px; margin: 0 0 4px; }
+    .result-low  { background: #EDF3DC; border: 1px solid #B7D488; }
+    .result-mid  { background: #FBEBD4; border: 1px solid #F0B458; }
+    .result-high { background: #FBE5DD; border: 1px solid #E8916F; }
+    .result-low .title  { color: #365E14; font-weight: 700; font-size: 15.5px; margin: 0 0 4px; }
+    .result-mid .title  { color: #7A4B0A; font-weight: 700; font-size: 15.5px; margin: 0 0 4px; }
+    .result-high .title { color: #96341B; font-weight: 700; font-size: 15.5px; margin: 0 0 4px; }
     .result-low .desc   { color: #4A7A1E; font-size: 13px; margin: 0; }
     .result-mid .desc   { color: #A0680F; font-size: 13px; margin: 0; }
     .result-high .desc  { color: #B94E2C; font-size: 13px; margin: 0; }
+
+    /* ── Buttons ──────────────────────────────────── */
     .stButton > button {
-        background: linear-gradient(135deg, #A8431F, #E8963C) !important;
+        background: linear-gradient(135deg, var(--clr-terracotta), var(--clr-amber)) !important;
         color: white !important;
         border: none !important;
-        border-radius: 8px !important;
-        padding: 10px 24px !important;
-        font-size: 15px !important;
-        font-weight: 500 !important;
+        border-radius: 999px !important;
+        padding: 11px 26px !important;
+        font-size: 14.5px !important;
+        font-weight: 600 !important;
         width: 100% !important;
-        transition: filter 0.15s ease !important;
+        box-shadow: var(--shadow-sm) !important;
+        transition: transform 0.15s var(--ease), box-shadow 0.15s var(--ease), filter 0.15s var(--ease) !important;
     }
     .stButton > button:hover {
-        filter: brightness(1.08) !important;
+        filter: brightness(1.06) !important;
+        transform: translateY(-1px) !important;
+        box-shadow: var(--shadow-md) !important;
     }
+    .stButton > button:active { transform: translateY(0) !important; }
+    .stButton > button:focus-visible {
+        outline: 2px solid var(--clr-ink) !important;
+        outline-offset: 2px !important;
+    }
+
+    /* ── Tabs — segmented pill control ───────────── */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 6px;
+        background: var(--clr-card);
+        border: 1px solid var(--clr-border);
+        border-radius: 999px;
+        padding: 5px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 999px;
+        color: var(--clr-muted);
+        font-weight: 600;
+        font-size: 13.5px;
+        padding: 8px 18px;
+        transition: all 0.2s var(--ease);
+    }
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, var(--clr-terracotta), var(--clr-amber)) !important;
+        color: white !important;
+        box-shadow: var(--shadow-sm);
+    }
+    .stTabs [data-baseweb="tab-highlight"] { background: transparent !important; }
+    .stTabs [data-baseweb="tab-border"] { background: transparent !important; }
+
+    /* ── Chat ─────────────────────────────────────── */
     .chat-header {
-        background: linear-gradient(135deg, #A8431F, #E8963C);
+        background: linear-gradient(135deg, var(--clr-terracotta), var(--clr-amber));
         color: white;
-        padding: 12px 16px;
-        border-radius: 10px 10px 0 0;
+        padding: 14px 18px;
+        border-radius: var(--radius) var(--radius) 0 0;
         font-size: 14px;
-        font-weight: 500;
+        font-weight: 600;
+        box-shadow: var(--shadow-sm);
     }
+    [data-testid="stChatMessage"] {
+        background: var(--clr-card) !important;
+        border: 1px solid var(--clr-border) !important;
+        border-radius: var(--radius-sm) !important;
+        box-shadow: var(--shadow-sm);
+        margin-bottom: 8px;
+    }
+    [data-testid="stChatInput"] {
+        border-radius: 999px !important;
+        border: 1px solid var(--clr-border) !important;
+    }
+
+    /* ── Alerts — recolor to warm palette ────────── */
+    [data-testid="stAlert"] {
+        border-radius: var(--radius-sm) !important;
+        box-shadow: var(--shadow-sm);
+    }
+
+    /* ── About box ────────────────────────────────── */
     .about-box {
-        background: #FDF6EB;
-        border: 0.5px solid #EAD3AA;
-        border-radius: 10px;
-        padding: 16px 20px;
-        margin-top: 20px;
+        background: var(--clr-card);
+        border: 1px solid var(--clr-border);
+        border-radius: var(--radius);
+        padding: 18px 22px;
+        margin-top: 22px;
+        box-shadow: var(--shadow-sm);
     }
     .about-box h4 {
-        font-size: 13px;
+        font-family: 'Fraunces', serif;
+        font-size: 15px;
         font-weight: 600;
-        color: #3A2416;
+        color: var(--clr-ink);
         margin: 0 0 8px;
     }
     .about-box p {
-        font-size: 12px;
-        color: #7A6047;
+        font-size: 12.5px;
+        color: var(--clr-muted);
         margin: 0;
-        line-height: 1.6;
+        line-height: 1.65;
     }
+
+    /* ── Hero stat box (departure time etc.) ─────── */
     .risk-score-box {
-        background: linear-gradient(135deg, #8C3A16, #E8963C);
-        border-radius: 12px;
-        padding: 20px;
+        background: linear-gradient(135deg, #8C3A16, var(--clr-amber));
+        border-radius: var(--radius);
+        padding: 22px;
         text-align: center;
         color: white;
         margin-bottom: 16px;
-        box-shadow: 0 4px 18px rgba(140,58,22,0.25);
+        box-shadow: var(--shadow-md);
     }
     .risk-score-num {
-        font-size: 48px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 46px;
         font-weight: 700;
         margin: 0;
         line-height: 1;
+        letter-spacing: -0.02em;
     }
     .risk-score-label {
         font-size: 13px;
-        opacity: 0.85;
-        margin: 4px 0 0;
+        opacity: 0.88;
+        margin: 6px 0 0;
+        font-weight: 500;
     }
+
+    /* ── Risk gauge — signature element ──────────── */
+    .gauge-wrap {
+        display: flex; align-items: center; justify-content: center;
+        gap: 22px;
+        background: var(--clr-card);
+        border: 1px solid var(--clr-border);
+        border-radius: var(--radius);
+        padding: 20px 24px;
+        margin-bottom: 16px;
+        box-shadow: var(--shadow-md);
+    }
+    .gauge-ring {
+        width: 108px; height: 108px;
+        border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
+        transition: background 0.6s var(--ease);
+    }
+    .gauge-ring-inner {
+        width: 84px; height: 84px;
+        border-radius: 50%;
+        background: var(--clr-card);
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        box-shadow: inset 0 1px 3px rgba(58,36,22,0.08);
+    }
+    .gauge-num {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 26px; font-weight: 700; color: var(--clr-ink);
+        line-height: 1;
+    }
+    .gauge-max { font-size: 10px; color: var(--clr-label); margin-top: 2px; }
+    .gauge-text { text-align: left; }
+    .gauge-label {
+        font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+        text-transform: uppercase; color: var(--clr-label); margin: 0 0 4px;
+    }
+    .gauge-level {
+        font-family: 'Fraunces', serif;
+        font-size: 22px; font-weight: 600; margin: 0;
+    }
+
+    /* ── Profile box ──────────────────────────────── */
     .profile-box {
-        background: linear-gradient(135deg, #3A2416, #6B4226);
-        border-radius: 12px;
-        padding: 16px 20px;
+        background: linear-gradient(135deg, var(--clr-ink), #6B4226);
+        border-radius: var(--radius);
+        padding: 18px 22px;
         color: white;
         margin-bottom: 16px;
+        box-shadow: var(--shadow-md);
     }
     .profile-box h4 {
-        font-size: 14px;
-        font-weight: 600;
-        margin: 0 0 8px;
-        color: white;
+        font-family: 'Fraunces', serif;
+        font-size: 15px; font-weight: 600; margin: 0 0 8px; color: white;
     }
-    .profile-box p {
-        font-size: 12px;
-        opacity: 0.85;
-        margin: 0 0 4px;
-        color: white;
-    }
+    .profile-box p { font-size: 12.5px; opacity: 0.88; margin: 0 0 4px; color: white; }
+
     .forecast-card {
-        background: #FDF6EB;
-        border: 0.5px solid #EAD3AA;
-        border-radius: 8px;
+        background: var(--clr-card);
+        border: 1px solid var(--clr-border);
+        border-radius: var(--radius-sm);
         padding: 10px 12px;
         text-align: center;
         margin-bottom: 6px;
+        box-shadow: var(--shadow-sm);
+        transition: transform 0.2s var(--ease);
     }
-    hr { border-color: #EAD3AA !important; }
+    .forecast-card:hover { transform: translateY(-2px); }
+
+    hr { border-color: var(--clr-border) !important; }
 </style>""", unsafe_allow_html=True)
 
 # ── Load ML model ─────────────────────────────────
@@ -717,10 +870,23 @@ with tab1:
             risk_label_text = ('Low Risk' if risk_score < 35
                                else 'Medium Risk' if risk_score < 65
                                else 'High Risk')
+            gauge_color = ('#4A7A1E' if risk_score < 35
+                           else '#C77A0C' if risk_score < 65
+                           else '#B94E2C')
+            gauge_deg = round(risk_score / 100 * 360)
             st.markdown(f"""
-            <div class="risk-score-box">
-                <p class="risk-score-num">{risk_score}</p>
-                <p class="risk-score-label">/ 100 — {risk_label_text}</p>
+            <div class="gauge-wrap">
+                <div class="gauge-ring" style="background: conic-gradient(
+                    {gauge_color} {gauge_deg}deg, #EAD3AA {gauge_deg}deg)">
+                    <div class="gauge-ring-inner">
+                        <p class="gauge-num">{risk_score}</p>
+                        <p class="gauge-max">/ 100</p>
+                    </div>
+                </div>
+                <div class="gauge-text">
+                    <p class="gauge-label">Current condition</p>
+                    <p class="gauge-level" style="color:{gauge_color}">{risk_label_text}</p>
+                </div>
             </div>
             """, unsafe_allow_html=True)
 
