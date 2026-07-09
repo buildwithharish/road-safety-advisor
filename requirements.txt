@@ -9,4 +9,5 @@ folium
 streamlit-folium
 timezonefinder
 pytz
-streamlit-autorefresh
+gspread
+google-auth
