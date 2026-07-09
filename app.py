@@ -394,6 +394,59 @@ st.markdown("""
     .forecast-card:hover { transform: translateY(-2px); }
 
     hr { border-color: var(--clr-border) !important; }
+
+    /* ── Safety net: force readable text on built-in Streamlit
+       widgets. These normally inherit color from Streamlit's theme;
+       without an explicit light theme they default to white text,
+       which disappears on the light cards above. ─────────────── */
+    [data-testid="stMarkdownContainer"],
+    [data-testid="stMarkdownContainer"] p,
+    [data-testid="stMarkdownContainer"] li,
+    [data-testid="stMarkdownContainer"] span,
+    [data-testid="stCaptionContainer"],
+    [data-testid="stCaptionContainer"] p,
+    [data-testid="stWidgetLabel"] p,
+    [data-testid="stWidgetLabel"] label,
+    [data-testid="stMetricValue"],
+    [data-testid="stMetricLabel"],
+    [data-testid="stMetricDelta"],
+    [data-testid="stExpander"] summary,
+    [data-testid="stExpander"] p,
+    label, .stCheckbox label, .stRadio label,
+    .stSlider label, .stNumberInput label,
+    .stTextInput label, .stSelectbox label {
+        color: var(--clr-ink) !important;
+    }
+    /* Sidebar text follows the same ink color */
+    section[data-testid="stSidebar"] * { color: var(--clr-ink); }
+    /* Alert boxes (info/success/warning/error) keep their tinted
+       backgrounds but force readable dark text over them */
+    [data-testid="stAlert"] p, [data-testid="stAlert"] div,
+    [data-testid="stAlert"] span {
+        color: var(--clr-ink) !important;
+    }
+    /* Dataframe / table text */
+    [data-testid="stDataFrame"] * { color: var(--clr-ink) !important; }
+    /* Text input / select box value text and their dropdown menus */
+    .stTextInput input, .stNumberInput input {
+        color: var(--clr-ink) !important;
+        background: var(--clr-card) !important;
+    }
+    [data-baseweb="select"] * { color: var(--clr-ink) !important; }
+    [data-baseweb="popover"] { background: var(--clr-card) !important; }
+    [data-baseweb="menu"] li { color: var(--clr-ink) !important; }
+
+    /* Elements that intentionally sit on a colored/gradient
+       background must stay white — re-assert after the safety net
+       above so specificity doesn't flip them dark. */
+    .main-header h1, .main-header p,
+    .stButton > button,
+    .stTabs [aria-selected="true"],
+    .chat-header,
+    .risk-score-num, .risk-score-label,
+    .profile-box, .profile-box h4, .profile-box p {
+        color: white !important;
+    }
 </style>""", unsafe_allow_html=True)
 
 # ── Load ML model ─────────────────────────────────
