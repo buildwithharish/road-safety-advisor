@@ -479,8 +479,10 @@ def get_sheet():
             creds_dict, scopes=scopes)
         client = gspread.authorize(creds)
         sheet = client.open_by_key(st.secrets["SHEET_ID"]).sheet1
+        st.session_state['sheets_error'] = None
         return sheet
     except Exception as e:
+        st.session_state['sheets_error'] = f"{type(e).__name__}: {e}"
         return None
 
 
@@ -1405,6 +1407,33 @@ Start each point with an emoji."""
         st.error(
             "Could not connect to Google Sheets. "
             "Check your secrets configuration.")
+        err = st.session_state.get('sheets_error')
+        if err:
+            with st.expander("⚙️ Debug info (error detail)"):
+                st.code(err)
+        with st.expander("✅ Checklist to fix this"):
+            st.markdown("""
+1. **Secrets exist** — your Streamlit secrets must have both
+   `GCP_CREDENTIALS` (the full service account JSON, as a string)
+   and `SHEET_ID` (the spreadsheet ID from its URL).
+2. **`GCP_CREDENTIALS` is valid JSON on one line** — paste the
+   entire service account key file content, keep the `\\n` inside
+   `private_key` escaped, and wrap the whole thing in triple quotes
+   in `secrets.toml`, e.g.:
+   ```
+   GCP_CREDENTIALS = '''{"type": "service_account", ...}'''
+   SHEET_ID = "1AbCдефID_from_your_sheet_url"
+   ```
+3. **The sheet is shared with the service account** — open the
+   service account JSON, copy the `client_email` value
+   (looks like `xyz@project.iam.gserviceaccount.com`), then share
+   your Google Sheet with that email as **Editor**.
+4. **APIs are enabled** — in Google Cloud Console, both the
+   **Google Sheets API** and **Google Drive API** must be enabled
+   for the project that owns the service account.
+5. **`SHEET_ID` is correct** — it's the long string between
+   `/d/` and `/edit` in the sheet's URL, not the sheet name.
+            """)
 
 # ════════════════════════════════════════════════════
 # TAB 3 — JOURNEY PLANNER
