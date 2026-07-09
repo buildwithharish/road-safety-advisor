@@ -457,11 +457,27 @@ except Exception:
     st.stop()
 
 # ── Gemini AI setup ───────────────────────────────
-try:
+@st.cache_resource(show_spinner=False)
+def init_gemini():
+    """Set up Gemini once per session, pinned to a reliable model
+    rather than genai.list_models()[0] whose order isn't guaranteed."""
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    available_models = [m.name for m in genai.list_models()
-                        if 'generateContent' in m.supported_generation_methods]
-    gemini = genai.GenerativeModel(available_models[0])
+    preferred = [
+        "models/gemini-2.0-flash", "models/gemini-1.5-flash",
+        "models/gemini-1.5-flash-latest", "models/gemini-1.5-flash-002",
+        "models/gemini-pro",
+    ]
+    available = [m.name for m in genai.list_models()
+                 if 'generateContent' in m.supported_generation_methods]
+    for name in preferred:
+        if name in available:
+            return genai.GenerativeModel(name)
+    if available:
+        return genai.GenerativeModel(available[0])
+    raise RuntimeError("No Gemini model supports generateContent")
+
+try:
+    gemini = init_gemini()
 except Exception:
     st.error("Gemini API key error. Check your Streamlit secrets.")
     st.stop()
@@ -487,10 +503,13 @@ def get_sheet():
 
 
 def save_trip_to_sheet(sheet, data):
-    """Save a trip record to Google Sheets"""
+    """Save a trip record to Google Sheets. Returns the 1-indexed row
+    number the trip was written to, so feedback can target that exact
+    row later instead of recomputing "last row" (which can collide if
+    another user appends a trip in between)."""
     try:
-        # Add header if sheet is empty
-        if sheet.row_count <= 1 and not sheet.get_all_values():
+        existing = sheet.get_all_values()
+        if not existing:
             headers = [
                 "Timestamp", "Location", "Destination",
                 "Weather", "Temperature", "Wind Speed",
@@ -500,10 +519,11 @@ def save_trip_to_sheet(sheet, data):
                 "Hours Driving", "Feedback"
             ]
             sheet.append_row(headers)
+            existing = [headers]
         sheet.append_row(data)
-        return True
+        return len(existing) + 1  # row index of the row we just wrote
     except Exception:
-        return False
+        return None
 
 
 def get_trip_history(sheet):
@@ -587,6 +607,7 @@ def get_local_time(lat, lon):
         return datetime.now(), "UTC"
 
 
+@st.cache_data(ttl=300, show_spinner=False)
 def get_weather(lat, lon):
     try:
         url = (f"https://api.openweathermap.org/data/2.5/weather"
@@ -622,6 +643,7 @@ def get_weather(lat, lon):
         return 1, "Fine no high winds", 1, "Dry", 0, "Unknown", 0, 0
 
 
+@st.cache_data(ttl=300, show_spinner=False)
 def get_location_info(lat, lon):
     try:
         url = (f"https://nominatim.openstreetmap.org/reverse"
@@ -658,6 +680,7 @@ def get_light_condition(local_time):
         return 4, "Darkness - lights lit"
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_destination_coords(destination):
     try:
         url = (f"https://nominatim.openstreetmap.org/search"
@@ -674,6 +697,7 @@ def get_destination_coords(destination):
         return destination, None, None
 
 
+@st.cache_data(ttl=300, show_spinner=False)
 def get_nearest_hospitals(lat, lon):
     try:
         query = f"""
@@ -1056,7 +1080,7 @@ with tab1:
                     sheet = get_sheet()
                     if sheet and 'trip_data' in st.session_state:
                         td = st.session_state['trip_data']
-                        save_trip_to_sheet(sheet, [
+                        st.session_state['trip_row'] = save_trip_to_sheet(sheet, [
                             td['timestamp'], td['location'],
                             td['destination'], td['weather'],
                             td['temp'], td['wind'],
@@ -1097,7 +1121,7 @@ Keep it short and practical."""
                 st_folium(
                     st.session_state['route_map'],
                     width=620, height=450,
-                    key="persistent_map")
+                    key="persistent_map", returned_objects=[])
 
                 dist = st.session_state.get('distance', 0)
                 dur = st.session_state.get('duration', 0)
@@ -1255,30 +1279,30 @@ Keep it short and practical."""
                 with col_y:
                     if st.button("👍 Yes, accurate"):
                         sheet = get_sheet()
-                        if sheet:
+                        row = st.session_state.get('trip_row')
+                        if sheet and row:
                             try:
-                                last_row = len(
-                                    sheet.get_all_values())
-                                sheet.update_cell(
-                                    last_row, 17, 'Accurate')
+                                sheet.update_cell(row, 17, 'Accurate')
                                 st.success(
                                     "Thanks! Feedback saved ✅")
                             except Exception:
                                 st.success("Thanks for feedback!")
+                        else:
+                            st.success("Thanks for feedback!")
                 with col_n:
                     if st.button("👎 No, inaccurate"):
                         sheet = get_sheet()
-                        if sheet:
+                        row = st.session_state.get('trip_row')
+                        if sheet and row:
                             try:
-                                last_row = len(
-                                    sheet.get_all_values())
-                                sheet.update_cell(
-                                    last_row, 17, 'Inaccurate')
+                                sheet.update_cell(row, 17, 'Inaccurate')
                                 st.info(
                                     "Thanks! We'll use this "
                                     "to improve the model.")
                             except Exception:
                                 st.info("Thanks for feedback!")
+                        else:
+                            st.info("Thanks for feedback!")
 
             else:
                 m = folium.Map(
@@ -1300,7 +1324,7 @@ Keep it short and practical."""
                     fill_opacity=0.1
                 ).add_to(m)
                 st_folium(m, width=620, height=450,
-                          key="default_map")
+                          key="default_map", returned_objects=[])
                 st.info(
                     "👆 Enter your destination and "
                     "click Analyze Route.")
