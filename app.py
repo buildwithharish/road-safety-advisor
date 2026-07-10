@@ -494,15 +494,15 @@ except Exception:
     st.stop()
 
 # ── Gemini AI setup ───────────────────────────────
-@st.cache_resource(show_spinner=False)
 def init_gemini():
-    """Set up Gemini once per session, pinned to a reliable model
-    rather than genai.list_models()[0] whose order isn't guaranteed."""
+    """Set up Gemini — no cache so new API key is always picked up."""
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
     preferred = [
-        "models/gemini-2.0-flash", "models/gemini-1.5-flash",
-        "models/gemini-1.5-flash-latest", "models/gemini-1.5-flash-002",
-        "models/gemini-pro",
+        "models/gemini-2.5-flash-lite",
+        "models/gemini-2.0-flash-001",
+        "models/gemini-2.0-flash-lite-001",
+        "models/gemini-2.0-flash-lite",
+        "models/gemini-2.5-flash-preview-tts",
     ]
     available = [m.name for m in genai.list_models()
                  if 'generateContent' in m.supported_generation_methods]
@@ -1613,51 +1613,98 @@ Keep it short, practical, start each with an emoji."""
 st.markdown("<br>", unsafe_allow_html=True)
 st.markdown(
     '<div class="chat-header">'
-    '💬 Road Safety AI Chatbot — Ask me anything'
+    '✨ AI Assistant — Powered by Gemini'
     '</div>',
     unsafe_allow_html=True)
 st.markdown("<br>", unsafe_allow_html=True)
 
+# Initialize chat history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-for msg in st.session_state.messages:
-    st.chat_message(msg["role"]).write(msg["content"])
+# Initialize Gemini chat session
+if "gemini_chat" not in st.session_state:
+    st.session_state.gemini_chat = gemini.start_chat(history=[])
 
-user_input = st.chat_input("Ask a road safety question...")
+# Clear chat button
+col_chat1, col_chat2 = st.columns([5, 1])
+with col_chat2:
+    if st.button("🗑 Clear", key="clear_chat"):
+        st.session_state.messages = []
+        st.session_state.gemini_chat = gemini.start_chat(history=[])
+        st.rerun()
+
+# Show all previous messages with markdown rendering
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+
+# Chat input
+user_input = st.chat_input("Message AI Assistant...")
 
 if user_input:
-    st.chat_message("user").write(user_input)
+    with st.chat_message("user"):
+        st.markdown(user_input)
     st.session_state.messages.append({
         "role": "user", "content": user_input
     })
 
-    history = ""
-    for msg in st.session_state.messages[:-1]:
-        role = "User" if msg["role"] == "user" else "Bot"
-        history += f"{role}: {msg['content']}\n"
+    with st.chat_message("assistant"):
+        with st.spinner(""):
+            try:
+                # Use Gemini chat session — keeps full conversation memory
+                response = st.session_state.gemini_chat.send_message(
+                    user_input,
+                    generation_config={
+                        "temperature": 0.9,
+                        "top_p": 0.95,
+                        "max_output_tokens": 2048,
+                    }
+                )
+                bot_reply = response.text
 
-    with st.spinner("Thinking..."):
-        prompt = f"""You are a helpful road safety advisor chatbot.
-Only answer questions related to road safety, driving tips,
-accident prevention, traffic rules, and vehicle safety.
-Keep answers short, clear and practical (max 4 lines).
-If the question is not about road safety, politely say
-you can only help with road safety topics.
+            except Exception as e:
+                err = str(e)
+                if "429" in err or "quota" in err.lower():
+                    bot_reply = (
+                        "⏳ **AI quota limit reached.**\n\n"
+                        "The free Gemini API resets every 24 hours. "
+                        "Please try again later."
+                    )
+                else:
+                    # Fallback with fresh chat session
+                    try:
+                        fallback_history = []
+                        for m in st.session_state.messages[:-1]:
+                            role = "user" if m["role"] == "user" else "model"
+                            fallback_history.append({
+                                "role": role,
+                                "parts": [m["content"]]
+                            })
+                        fresh_chat = gemini.start_chat(
+                            history=fallback_history)
+                        fallback_resp = fresh_chat.send_message(
+                            user_input,
+                            generation_config={
+                                "temperature": 0.9,
+                                "max_output_tokens": 2048,
+                            }
+                        )
+                        bot_reply = fallback_resp.text
+                        st.session_state.gemini_chat = fresh_chat
+                    except Exception as e2:
+                        err2 = str(e2)
+                        if "429" in err2 or "quota" in err2.lower():
+                            bot_reply = (
+                                "⏳ **Quota limit reached.** "
+                                "Please try again in a few hours."
+                            )
+                        else:
+                            bot_reply = f"⚠️ Error: {err2[:200]}"
 
-Conversation so far:
-{history}
-User: {user_input}
-Bot:"""
-        try:
-            response = gemini.generate_content(prompt)
-            bot_reply = (response.text if response and response.text
-                         else "Sorry, please try asking differently.")
-        except Exception:
-            bot_reply = ("Sorry, I had trouble answering. "
-                         "Please try rephrasing.")
+        # Render as markdown — bold, lists, code blocks like Gemini
+        st.markdown(bot_reply)
 
-    st.chat_message("assistant").write(bot_reply)
     st.session_state.messages.append({
         "role": "assistant", "content": bot_reply
     })
