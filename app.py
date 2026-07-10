@@ -427,6 +427,43 @@ st.markdown("""
     }
     /* Dataframe / table text */
     [data-testid="stDataFrame"] * { color: var(--clr-ink) !important; }
+
+    /* Dataframe toolbar (search/download/fullscreen icons) — this
+       floats above the table and was rendering with a dark background
+       + white icons regardless of theme. Target the stable testid
+       (robust across Streamlit versions) plus the exact class from
+       the screenshot as a redundant fallback — note that
+       "st-emotion-cache-*" hashes are auto-generated and can change
+       between Streamlit releases, so the testid rule is the one doing
+       the real work long-term. */
+    [data-testid="stElementToolbar"],
+    div.stElementToolbar {
+        background: var(--clr-card) !important;
+        border: 1px solid var(--clr-border) !important;
+        border-radius: var(--radius-sm) !important;
+        box-shadow: var(--shadow-sm) !important;
+    }
+    [data-testid="stElementToolbar"] button,
+    div.stElementToolbar button {
+        background: transparent !important;
+        color: var(--clr-ink) !important;
+    }
+    [data-testid="stElementToolbar"] button:hover,
+    div.stElementToolbar button:hover {
+        background: var(--clr-card-alt) !important;
+    }
+    [data-testid="stElementToolbar"] svg,
+    div.stElementToolbar svg {
+        fill: var(--clr-ink) !important;
+        color: var(--clr-ink) !important;
+    }
+    /* The search box that pops out of the toolbar */
+    [data-testid="stElementToolbar"] input {
+        background: var(--clr-card) !important;
+        color: var(--clr-ink) !important;
+        border-color: var(--clr-border) !important;
+    }
+
     /* Text input / select box value text and their dropdown menus */
     .stTextInput input, .stNumberInput input {
         color: var(--clr-ink) !important;
