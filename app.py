@@ -494,30 +494,70 @@ except Exception:
     st.stop()
 
 # ── Gemini AI setup ───────────────────────────────
+# Google periodically shuts down older model IDs (this is what caused
+# the "gemini-2.5-flash is no longer available to new users" error —
+# list_models() still listed it as generateContent-capable, but it
+# 404s for this key in practice). So instead of trusting list_models()
+# metadata, we live-test each candidate with a tiny call and use the
+# first one that actually works. "gemini-flash-latest" is a
+# Google-maintained alias that always points at a current supported
+# model, so listing it first makes this resilient to future
+# deprecations too — no more manual model-name updates needed.
+GEMINI_CANDIDATES = [
+    "models/gemini-flash-latest",
+    "models/gemini-3.5-flash",
+    "models/gemini-3.1-flash-lite",
+    "models/gemini-2.5-flash-lite",
+    "models/gemini-2.5-flash",
+    "models/gemini-2.5-pro",
+]
+
+@st.cache_resource(show_spinner=False)
 def init_gemini():
-    """Auto-detect first available Gemini model — works with any API key."""
+    """Find and cache the first Gemini model that actually responds
+    for this API key. Cached per app session so the test only runs
+    once, not on every rerun."""
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    available = [
-        m.name for m in genai.list_models()
-        if 'generateContent' in m.supported_generation_methods
-        and 'gemini' in m.name.lower()
-        and 'tts' not in m.name.lower()
-        and 'image' not in m.name.lower()
-        and 'embedding' not in m.name.lower()
-    ]
-    if not available:
-        raise RuntimeError("No Gemini model available for this API key")
-    # Prefer flash models — fast and free
-    for m in available:
-        if 'flash' in m and 'lite' not in m and 'preview' not in m:
-            return genai.GenerativeModel(m)
-    # Fallback to first available
-    return genai.GenerativeModel(available[0])
+
+    def _try(name):
+        candidate = genai.GenerativeModel(name)
+        candidate.generate_content(
+            "ping", generation_config={"max_output_tokens": 5})
+        return candidate
+
+    last_err = None
+    for name in GEMINI_CANDIDATES:
+        try:
+            return _try(name), name
+        except Exception as e:
+            last_err = e
+            continue
+
+    # Last resort: whatever this key can currently list, tested the
+    # same way (don't just grab [0] and trust it blindly)
+    try:
+        available = [m.name for m in genai.list_models()
+                     if 'generateContent' in m.supported_generation_methods]
+    except Exception:
+        available = []
+    for name in available:
+        try:
+            return _try(name), name
+        except Exception as e:
+            last_err = e
+            continue
+
+    raise RuntimeError(
+        f"No working Gemini model found for this API key. "
+        f"Last error: {last_err}")
 
 try:
-    gemini = init_gemini()
-except Exception:
-    st.error("Gemini API key error. Check your Streamlit secrets.")
+    gemini, gemini_model_name = init_gemini()
+except Exception as e:
+    st.error("Gemini API key error, or no available model works for "
+              "this key. Check your Streamlit secrets / API key access.")
+    with st.expander("⚙️ Debug info (error detail)"):
+        st.code(str(e))
     st.stop()
 
 # ── Google Sheets setup ───────────────────────────
