@@ -497,11 +497,12 @@ except Exception:
 def init_gemini():
     """Set up Gemini — no cache so new API key is always picked up."""
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    preferred = [
-        "models/gemini-2.5-flash",
-        "models/gemini-2.0-flash",
+   preferred = [
         "models/gemini-2.5-flash-lite",
+        "models/gemini-2.0-flash-001",
+        "models/gemini-2.0-flash-lite-001",
         "models/gemini-2.0-flash-lite",
+        "models/gemini-2.5-flash-preview-tts",
     ]
     available = [m.name for m in genai.list_models()
                  if 'generateContent' in m.supported_generation_methods]
