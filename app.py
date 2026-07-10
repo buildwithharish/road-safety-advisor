@@ -494,15 +494,14 @@ except Exception:
     st.stop()
 
 # ── Gemini AI setup ───────────────────────────────
-@st.cache_resource(show_spinner=False)
 def init_gemini():
-    """Set up Gemini once per session, pinned to a reliable model
-    rather than genai.list_models()[0] whose order isn't guaranteed."""
+    """Set up Gemini — no cache so new API key is always picked up."""
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
     preferred = [
-        "models/gemini-2.0-flash", "models/gemini-1.5-flash",
-        "models/gemini-1.5-flash-latest", "models/gemini-1.5-flash-002",
-        "models/gemini-pro",
+        "models/gemini-2.5-flash",
+        "models/gemini-2.0-flash",
+        "models/gemini-2.5-flash-lite",
+        "models/gemini-2.0-flash-lite",
     ]
     available = [m.name for m in genai.list_models()
                  if 'generateContent' in m.supported_generation_methods]
