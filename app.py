@@ -1684,8 +1684,17 @@ if user_input:
                         }
                     )
                     bot_reply = fallback_response.text
-                except Exception as e2:
-                    bot_reply = f"⚠️ Error: {str(e2)[:200]}"
+               except Exception as e:
+                    err = str(e)
+                    if "429" in err:
+                        bot_reply = ("⏳ AI quota limit reached for today. "
+                                     "Please try again after a few hours. "
+                                     "This resets automatically every 24 hours.")
+                    elif "quota" in err.lower():
+                        bot_reply = ("⏳ API quota exceeded. "
+                                     "Please try again later.")
+                    else:
+                        bot_reply = f"⚠️ Error: {err[:200]}"
 
         # Render response as markdown — exactly like Gemini app
         st.markdown(bot_reply)
