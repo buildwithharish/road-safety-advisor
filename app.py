@@ -1613,51 +1613,84 @@ Keep it short, practical, start each with an emoji."""
 st.markdown("<br>", unsafe_allow_html=True)
 st.markdown(
     '<div class="chat-header">'
-    '💬 Road Safety AI Chatbot — Ask me anything'
+    '✨ AI Assistant — Powered by Gemini'
     '</div>',
     unsafe_allow_html=True)
 st.markdown("<br>", unsafe_allow_html=True)
 
+# Initialize chat history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-for msg in st.session_state.messages:
-    st.chat_message(msg["role"]).write(msg["content"])
+# Initialize Gemini chat session with full history
+if "gemini_chat" not in st.session_state:
+    st.session_state.gemini_chat = gemini.start_chat(history=[])
 
-user_input = st.chat_input("Ask a road safety question...")
+# Clear chat button
+col_chat1, col_chat2 = st.columns([5, 1])
+with col_chat2:
+    if st.button("🗑 Clear", key="clear_chat"):
+        st.session_state.messages = []
+        st.session_state.gemini_chat = gemini.start_chat(history=[])
+        st.rerun()
+
+# Show all previous messages with markdown rendering
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+
+# Chat input
+user_input = st.chat_input("Message AI Assistant...")
 
 if user_input:
-    st.chat_message("user").write(user_input)
+    # Show user message immediately
+    with st.chat_message("user"):
+        st.markdown(user_input)
     st.session_state.messages.append({
         "role": "user", "content": user_input
     })
 
-    history = ""
-    for msg in st.session_state.messages[:-1]:
-        role = "User" if msg["role"] == "user" else "Bot"
-        history += f"{role}: {msg['content']}\n"
+    # Get Gemini response using chat session (maintains memory)
+    with st.chat_message("assistant"):
+        with st.spinner(""):
+            try:
+                # Send message to Gemini chat session
+                # This automatically includes full conversation history
+                response = st.session_state.gemini_chat.send_message(
+                    user_input,
+                    generation_config={
+                        "temperature": 0.9,
+                        "top_p": 0.95,
+                        "max_output_tokens": 2048,
+                    }
+                )
+                bot_reply = response.text
 
-    with st.spinner("Thinking..."):
-        prompt = f"""You are a helpful road safety advisor chatbot.
-Only answer questions related to road safety, driving tips,
-accident prevention, traffic rules, and vehicle safety.
-Keep answers short, clear and practical (max 4 lines).
-If the question is not about road safety, politely say
-you can only help with road safety topics.
+            except Exception as e:
+                # If chat session fails, fall back to fresh generate
+                try:
+                    # Rebuild history for fallback
+                    fallback_prompt = ""
+                    for m in st.session_state.messages[:-1]:
+                        role = "User" if m["role"] == "user" else "Assistant"
+                        fallback_prompt += f"{role}: {m['content']}\n\n"
+                    fallback_prompt += f"User: {user_input}\nAssistant:"
 
-Conversation so far:
-{history}
-User: {user_input}
-Bot:"""
-        try:
-            response = gemini.generate_content(prompt)
-            bot_reply = (response.text if response and response.text
-                         else "Sorry, please try asking differently.")
-        except Exception:
-            bot_reply = ("Sorry, I had trouble answering. "
-                         "Please try rephrasing.")
+                    fallback_response = gemini.generate_content(
+                        fallback_prompt,
+                        generation_config={
+                            "temperature": 0.9,
+                            "max_output_tokens": 2048,
+                        }
+                    )
+                    bot_reply = fallback_response.text
+                except Exception as e2:
+                    bot_reply = f"⚠️ Error: {str(e2)[:200]}"
 
-    st.chat_message("assistant").write(bot_reply)
+        # Render response as markdown — exactly like Gemini app
+        st.markdown(bot_reply)
+
+    # Store assistant reply
     st.session_state.messages.append({
         "role": "assistant", "content": bot_reply
     })
