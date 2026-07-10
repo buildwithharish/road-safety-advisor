@@ -1622,7 +1622,7 @@ st.markdown("<br>", unsafe_allow_html=True)
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Initialize Gemini chat session with full history
+# Initialize Gemini chat session
 if "gemini_chat" not in st.session_state:
     st.session_state.gemini_chat = gemini.start_chat(history=[])
 
@@ -1643,19 +1643,16 @@ for msg in st.session_state.messages:
 user_input = st.chat_input("Message AI Assistant...")
 
 if user_input:
-    # Show user message immediately
     with st.chat_message("user"):
         st.markdown(user_input)
     st.session_state.messages.append({
         "role": "user", "content": user_input
     })
 
-    # Get Gemini response using chat session (maintains memory)
     with st.chat_message("assistant"):
         with st.spinner(""):
             try:
-                # Send message to Gemini chat session
-                # This automatically includes full conversation history
+                # Use Gemini chat session — keeps full conversation memory
                 response = st.session_state.gemini_chat.send_message(
                     user_input,
                     generation_config={
@@ -1667,39 +1664,47 @@ if user_input:
                 bot_reply = response.text
 
             except Exception as e:
-                # If chat session fails, fall back to fresh generate
-                try:
-                    # Rebuild history for fallback
-                    fallback_prompt = ""
-                    for m in st.session_state.messages[:-1]:
-                        role = "User" if m["role"] == "user" else "Assistant"
-                        fallback_prompt += f"{role}: {m['content']}\n\n"
-                    fallback_prompt += f"User: {user_input}\nAssistant:"
-
-                    fallback_response = gemini.generate_content(
-                        fallback_prompt,
-                        generation_config={
-                            "temperature": 0.9,
-                            "max_output_tokens": 2048,
-                        }
+                err = str(e)
+                if "429" in err or "quota" in err.lower():
+                    bot_reply = (
+                        "⏳ **AI quota limit reached.**\n\n"
+                        "The free Gemini API resets every 24 hours. "
+                        "Please try again later."
                     )
-                    bot_reply = fallback_response.text
-               except Exception as e:
-                    err = str(e)
-                    if "429" in err:
-                        bot_reply = ("⏳ AI quota limit reached for today. "
-                                     "Please try again after a few hours. "
-                                     "This resets automatically every 24 hours.")
-                    elif "quota" in err.lower():
-                        bot_reply = ("⏳ API quota exceeded. "
-                                     "Please try again later.")
-                    else:
-                        bot_reply = f"⚠️ Error: {err[:200]}"
+                else:
+                    # Fallback with fresh chat session
+                    try:
+                        fallback_history = []
+                        for m in st.session_state.messages[:-1]:
+                            role = "user" if m["role"] == "user" else "model"
+                            fallback_history.append({
+                                "role": role,
+                                "parts": [m["content"]]
+                            })
+                        fresh_chat = gemini.start_chat(
+                            history=fallback_history)
+                        fallback_resp = fresh_chat.send_message(
+                            user_input,
+                            generation_config={
+                                "temperature": 0.9,
+                                "max_output_tokens": 2048,
+                            }
+                        )
+                        bot_reply = fallback_resp.text
+                        st.session_state.gemini_chat = fresh_chat
+                    except Exception as e2:
+                        err2 = str(e2)
+                        if "429" in err2 or "quota" in err2.lower():
+                            bot_reply = (
+                                "⏳ **Quota limit reached.** "
+                                "Please try again in a few hours."
+                            )
+                        else:
+                            bot_reply = f"⚠️ Error: {err2[:200]}"
 
-        # Render response as markdown — exactly like Gemini app
+        # Render as markdown — bold, lists, code blocks like Gemini
         st.markdown(bot_reply)
 
-    # Store assistant reply
     st.session_state.messages.append({
         "role": "assistant", "content": bot_reply
     })
