@@ -495,23 +495,24 @@ except Exception:
 
 # ── Gemini AI setup ───────────────────────────────
 def init_gemini():
-    """Set up Gemini — no cache so new API key is always picked up."""
+    """Auto-detect first available Gemini model — works with any API key."""
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    preferred = [
-        "models/gemini-2.5-flash-lite",
-        "models/gemini-2.0-flash-001",
-        "models/gemini-2.0-flash-lite-001",
-        "models/gemini-2.0-flash-lite",
-        "models/gemini-2.5-flash-preview-tts",
+    available = [
+        m.name for m in genai.list_models()
+        if 'generateContent' in m.supported_generation_methods
+        and 'gemini' in m.name.lower()
+        and 'tts' not in m.name.lower()
+        and 'image' not in m.name.lower()
+        and 'embedding' not in m.name.lower()
     ]
-    available = [m.name for m in genai.list_models()
-                 if 'generateContent' in m.supported_generation_methods]
-    for name in preferred:
-        if name in available:
-            return genai.GenerativeModel(name)
-    if available:
-        return genai.GenerativeModel(available[0])
-    raise RuntimeError("No Gemini model supports generateContent")
+    if not available:
+        raise RuntimeError("No Gemini model available for this API key")
+    # Prefer flash models — fast and free
+    for m in available:
+        if 'flash' in m and 'lite' not in m and 'preview' not in m:
+            return genai.GenerativeModel(m)
+    # Fallback to first available
+    return genai.GenerativeModel(available[0])
 
 try:
     gemini = init_gemini()
