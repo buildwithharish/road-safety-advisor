@@ -961,6 +961,12 @@ with tab1:
             (area_code, area_label, road_code,
              road_label, location_name) = get_location_info(lat, lon)
 
+            # Save current GPS location immediately so it's available
+            # to the AI chatbot even before a route is analyzed.
+            st.session_state['user_lat'] = lat
+            st.session_state['user_lon'] = lon
+            st.session_state['location_name'] = location_name
+
             light_code, light_label = get_light_condition(local_time)
 
             risk_score = calculate_risk_score(
@@ -1692,10 +1698,43 @@ if user_input:
 
     with st.chat_message("assistant"):
         with st.spinner(""):
+            # Build an invisible location-context prefix from whatever
+            # GPS data we already have in session_state, so Gemini always
+            # answers using the user's real current location instead of
+            # guessing a generic hub/city.
+            user_lat = st.session_state.get('user_lat')
+            user_lon = st.session_state.get('user_lon')
+            loc_name = st.session_state.get('location_name')
+            if user_lat is not None and user_lon is not None:
+                location_context = (
+                    "[System context — not visible to the user: The "
+                    "user's real-time GPS location has already been "
+                    f"captured by this app. Current coordinates: "
+                    f"{user_lat}, {user_lon}"
+                    + (f", near {loc_name}" if loc_name else "")
+                    + ". Always treat this as the user's actual current "
+                    "location — do NOT say you lack access to their "
+                    "location or GPS, and do NOT assume a different "
+                    "starting point. Use these coordinates as the "
+                    "starting point for any directions, routes, or "
+                    "nearby-place questions.]\n\n"
+                )
+            else:
+                location_context = (
+                    "[System context — not visible to the user: GPS "
+                    "location has not been captured yet in this session "
+                    "(the user may not have granted location access in "
+                    "the Trip Advisor tab, or it hasn't loaded). If the "
+                    "user asks something location-dependent, ask them to "
+                    "allow location access in the Trip Advisor tab, or "
+                    "ask them to tell you their starting point.]\n\n"
+                )
+            augmented_input = location_context + user_input
+
             try:
                 # Use Gemini chat session — keeps full conversation memory
                 response = st.session_state.gemini_chat.send_message(
-                    user_input,
+                    augmented_input,
                     generation_config={
                         "temperature": 0.9,
                         "top_p": 0.95,
@@ -1725,7 +1764,7 @@ if user_input:
                         fresh_chat = gemini.start_chat(
                             history=fallback_history)
                         fallback_resp = fresh_chat.send_message(
-                            user_input,
+                            augmented_input,
                             generation_config={
                                 "temperature": 0.9,
                                 "max_output_tokens": 2048,
